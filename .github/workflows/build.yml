@@ -78,16 +78,23 @@ jobs:
             *)     PROFILE="production" ;; # стабильная — AAB для Play
           esac
           # EAS project: если projectId не закоммичен (eas init на машине разработки),
-          # создаём проект robot-токеном. --account принимает и логин, и UUID аккаунта,
-          # поэтому сначала резолвим логин токена в UUID через Expo API.
-          if ! grep -q '"extra"' app.json 2>/dev/null || ! grep -q 'eas.projectId' app.json 2>/dev/null; then
+          # создаём проект robot-токеном. --account принимает UUID аккаунта; логин
+          # ("kroshkoss-team") через me.accounts резолвим в UUID, а если GraphQL me
+          # недоступен для robot-токена — берём единственный аккаунт по slug-конвенции
+          # или спрашиваем eas config.
+          if ! grep -q 'eas.projectId' app.json 2>/dev/null; then
             ACC_UUID=$(curl -sf -H "Authorization: Bearer $EXPO_TOKEN" \
-              "https://api.expo.dev/graphql" -H "content-type: application/json" \
-              -d '{"query":"query { me { username accounts { id name } } }"}' | node -e "
-                let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
-                  const j=JSON.parse(d); const a=(j.data.me.accounts||[])[0];
-                  if(!a){console.error('no accounts:\n'+d);process.exit(1);}
-                  process.stdout.write(a.id);});")
+              "https://api.expo.dev/v2/metadata" 2>/dev/null | node -e "
+                let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const j=JSON.parse(d);process.stdout.write(j.me?.accounts?.[0]?.id||j.accounts?.[0]?.id||'');}catch(e){}});" || true)
+            if [ -z "$ACC_UUID" ]; then
+              # запасной путь: eas knows the token's account
+              ACC_UUID=$(eas whoami --json 2>/dev/null | node -e "
+                let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const j=JSON.parse(d);process.stdout.write(j.id||j.userId||'');}catch(e){}});" || true)
+            fi
+            if [ -z "$ACC_UUID" ]; then
+              echo "::error::Не удалось определить Expo-аккаунт по EXPO_TOKEN. Выполните один раз локально: eas login && eas init (в корне Zezar-app) и закоммитьте extra.eas.projectId в app.json."
+              exit 1
+            fi
             echo "Создаю EAS-проект slug=zezar-app в аккаунте $ACC_UUID"
             eas init --account "$ACC_UUID" --non-interactive
             git config user.email "ci@zezar.local"; git config user.name "zezar-ci"
