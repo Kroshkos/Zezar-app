@@ -63,7 +63,8 @@ export default function TasksScreen({ navigation, route }) {
   }, [paramFilter]);
 
   const modules = useMemo(() => (data ? data.modules : []), [data]);
-  const statuses = data && data.statuses ? (data.statuses.task || []) : [];
+  // v1.6: справочник статусов текущего модуля (module_statuses), фолбэк — task
+  const statuses = (data && ((data.module_statuses || {})[moduleKey] || (data.statuses || {}).task)) || [];
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -75,6 +76,11 @@ export default function TasksScreen({ navigation, route }) {
         </View>
       ) : null}
       <View style={{ padding: 12 }}>
+        {moduleKey && moduleKey !== 'tasks' ? (
+          <Text style={{ fontSize: 16, fontWeight: '700', color: colors.ink, marginBottom: 8 }}>
+            {(modules.find((m) => m.key === moduleKey) || {}).title || moduleKey}
+          </Text>
+        ) : null}
         <TextInput
           value={q} onChangeText={setQ} placeholder="Поиск по названию/описанию…"
           placeholderTextColor="#94a3b8" onSubmitEditing={load} returnKeyType="search"
@@ -101,7 +107,7 @@ export default function TasksScreen({ navigation, route }) {
           keyExtractor={(x) => x.uid}
           contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 90 }}
           refreshControl={<RefreshControl refreshing={loading && items.length === 0} onRefresh={load} tintColor={colors.primary} />}
-          ListEmptyComponent={!loading ? <EmptyState icon="🗂" text="Нет карточек. Нажмите «+», чтобы создать задачу." /> : null}
+          ListEmptyComponent={!loading ? <EmptyState icon="🗂" text={moduleKey && moduleKey !== 'tasks' ? 'В этом модуле пока нет карточек. Нажмите «+», чтобы создать.' : 'Нет задач. Нажмите «+», чтобы создать задачу.'} /> : null}
           renderItem={({ item }) => (
             <EntityCard item={item} statuses={statuses}
                         onPress={() => navigation.navigate('Entity', { uid: item.uid, local: !!item.local })} />
@@ -110,7 +116,7 @@ export default function TasksScreen({ navigation, route }) {
       )}
 
       <TouchableOpacity
-        onPress={() => navigation.navigate('NewTask')}
+        onPress={() => navigation.navigate('NewTask', { module_key: moduleKey || 'tasks' })}
         style={{ position: 'absolute', right: 20, bottom: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 5, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } }}
       >
         <Text style={{ color: '#fff', fontSize: 28, marginTop: -2 }}>+</Text>

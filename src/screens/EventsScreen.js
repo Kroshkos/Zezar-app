@@ -88,11 +88,14 @@ function safeAgo(iso) {
 export default function EventsScreen({ navigation }) {
   const { latest, unread, pushState, markAllRead, refreshList, registerPush } = useNotifications();
   const [loading, setLoading] = useState(true);
+  // v1.6.1: FlatList требует refreshing строго boolean при наличии onRefresh —
+  // без этого пропа экран падал с "refreshing' prop must be set as a boolean"
+  const [refreshing, setRefreshing] = useState(false);
   const focused = useIsFocused();
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try { await refreshList(); } finally { setLoading(false); }
+  const load = useCallback(async (isRefresh) => {
+    if (isRefresh) setRefreshing(true); else setLoading(true);
+    try { await refreshList(); } finally { setLoading(false); setRefreshing(false); }
   }, [refreshList]);
 
   useEffect(() => { load(); }, [load]);
@@ -130,7 +133,8 @@ export default function EventsScreen({ navigation }) {
           keyExtractor={(e, i) => String(e?.id ?? i)}
           renderItem={renderItem}
           contentContainerStyle={{ padding: 14 }}
-          onRefresh={load}
+          onRefresh={() => load(true)}
+          refreshing={refreshing}
           ListEmptyComponent={
             <View style={{ alignItems: 'center', marginTop: 60 }}>
               <Text style={{ fontSize: 40, marginBottom: 10 }}>🕊</Text>

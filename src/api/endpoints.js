@@ -30,6 +30,10 @@ export const listEntities = (params = {}) => {
 export const createTask = (payload) =>
   api('/api/mobile/tasks', { method: 'POST', body: payload });
 
+// v1.6: создание карточки в ЛЮБОМ модуле (module_key обязателен)
+export const createEntity = (payload) =>
+  api('/api/mobile/entities', { method: 'POST', body: payload });
+
 export const patchEntity = (uid, payload) =>
   api(`/api/mobile/entities/${encodeURIComponent(uid)}`, { method: 'PATCH', body: payload });
 

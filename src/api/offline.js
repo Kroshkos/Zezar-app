@@ -124,12 +124,16 @@ function applyPatchToLocal(item, patch) {
 // чтобы новые задачи были видны и оффлайн.
 export function mergeLocalTasks(items, moduleKey) {
   const localNew = queue
-    .filter((m) => m.kind === 'task')
-    .filter((m) => !moduleKey || moduleKey === 'tasks' || moduleKey === 'all')
+    .filter((m) => m.kind === 'entity' || m.kind === 'task')
+    .filter((m) => {
+      const mk = (m.payload && m.payload.module_key) || 'tasks';
+      return !moduleKey || moduleKey === 'all' || mk === moduleKey;
+    })
     .map((m) => ({
-      uid: m.id, local: true, kind: 'task', module_key: 'tasks',
+      uid: m.id, local: true, kind: m.payload.module_key ? m.kind : 'task',
+      module_key: m.payload.module_key || 'tasks',
       title: m.payload.title, description: m.payload.description || '',
-      status_key: 'new', priority_key: m.payload.priority_key || 'medium',
+      status_key: m.payload.status_key || 'new', priority_key: m.payload.priority_key || 'medium',
       due_date: m.payload.due_date || null,
       responsibles: [], executors: [], tags: [], perm: 'owner', can_edit: true,
       created_at: new Date(m.ts).toISOString(),
@@ -141,7 +145,7 @@ export function mergeLocalTasks(items, moduleKey) {
 }
 
 // Диспатчер: последовательно повторяем отложенные мутации.
-// sendTask / sendPatch — функции из endpoints.js.
+// sendTask (createEntity или createTask) / sendPatch — функции из endpoints.js.
 export async function flushQueue({ sendTask, sendPatch, onEvent }) {
   await loadQueue();
   if (!queue.length) return { flushed: 0, failed: 0 };
@@ -149,7 +153,7 @@ export async function flushQueue({ sendTask, sendPatch, onEvent }) {
   const remaining = [];
   for (const m of queue) {
     try {
-      if (m.kind === 'task') {
+      if (m.kind === 'task' || m.kind === 'entity') {
         const res = await sendTask(m.payload);
         if (res && res.uid) { m.serverUid = res.uid; onEvent && onEvent({ type: 'created', localId: m.id, uid: res.uid }); }
       } else if (m.kind === 'patch') {

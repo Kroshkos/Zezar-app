@@ -78,7 +78,9 @@ export default function EntityScreen({ route, navigation }) {
   if (loading) return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="large" color={colors.primary} /></View>;
   if (!item) return <EmptyState icon="🤷" text={err || 'Карточка не найдена (возможно, удалена)'} />;
 
-  const statuses = (data && data.statuses && data.statuses[item.kind]) || [];
+  // v1.6: статусы текущего модуля карточки; фолбэки — kind-справочник, task
+  const statuses = (data && ((data.module_statuses || {})[item.module_key]
+    || (data.statuses || {})[item.kind] || (data.statuses || {}).task)) || [];
   const priorities = (data && data.priorities) || [];
   const overdue = isOverdue(item.due_date) && item.status_key !== 'done';
 

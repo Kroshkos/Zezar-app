@@ -70,7 +70,12 @@ export function NotificationsProvider({ children }) {
     if (flushBusy.current) return;
     flushBusy.current = true;
     try {
-      const r = await flushQueue({ sendTask: api.createTask, sendPatch: api.patchEntity });
+      const r = await flushQueue({
+        // v1.6: задачи старого формата (без module_key) шлём на /tasks, карточки модулей — на /entities
+        sendTask: (payload) => (payload.module_key && payload.module_key !== 'tasks'
+          ? api.createEntity(payload) : api.createTask(payload)),
+        sendPatch: api.patchEntity,
+      });
       if (r.flushed) setPending(await loadQueue().then((q) => q.length));
     } finally {
       flushBusy.current = false;
