@@ -78,29 +78,36 @@ jobs:
             *)     PROFILE="production" ;; # стабильная — AAB для Play
           esac
           # EAS project: если projectId не закоммичен, создаём проект robot-токеном.
-          # Expo GraphQL (api.expo.dev/graphql) доступен и для robot-токенов — резолвим
-          # в UUID аккаунт с нужным логином (owner из app.json).
-          if ! grep -q 'eas.projectId' app.json 2>/dev/null; then
+          # Аккаунт резолвим через Expo GraphQL (доступен и для robot-токенов),
+          # приоритет — owner из app.json. set -e временно отключаем, чтобы видеть
+          # реальный код возврата каждого шага и печатать содержимое ответов в лог.
+          if ! grep -q 'projectId' app.json 2>/dev/null; then
+            set +e
             OWNER=$(node -e "console.log(JSON.parse(require('fs').readFileSync('app.json','utf8')).expo.owner||'')")
-            export OWNER; ACC_UUID=$(curl -sf -H "Authorization: Bearer $EXPO_TOKEN" \
+            echo "owner=$OWNER"
+            curl -sf --max-time 20 -H "Authorization: Bearer $EXPO_TOKEN" \
               "https://api.expo.dev/graphql" -H "content-type: application/json" \
-              -d '{"query":"query { accounts { id name } }"}' | node -e "
-                let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
-                  let j; try{j=JSON.parse(d);}catch(e){console.error(d);process.exit(1);}
-                  const accs=(j.data&&j.data.accounts)||[];
-                  const want=process.env.OWNER;
-                  const a=accs.find(x=>x.name===want)||accs[0];
-                  if(!a){console.error('нет доступных аккаунтов:\n'+d);process.exit(1);}
-                  process.stdout.write(a.id);});" )
+              -d '{"query":"query { accounts { id name } }"}' > acc.json
+            echo "graphql rc=$? resp=$(head -c 400 acc.json)"
+            ACC_UUID=$(node -e "
+              const fs=require('fs');
+              let j; try{j=JSON.parse(fs.readFileSync('acc.json','utf8'));}catch(e){process.exit(0);}
+              const accs=(j.data&&j.data.accounts)||[];
+              const want=process.env.OWNER;
+              const a=accs.find(x=>x.name===want)||accs[0];
+              if(a)process.stdout.write(a.id);")
+            echo "ACC_UUID=$ACC_UUID"
             if [ -z "$ACC_UUID" ]; then
-              echo "::error::Не удалось определить Expo-аккаунт по EXPO_TOKEN. Выполните один раз локально: eas login && eas init (в корне Zezar-app) и закоммитьте extra.eas.projectId в app.json."
+              echo "::error::Не удалось определить Expo-аккаунт по EXPO_TOKEN (см. resp выше)."
               exit 1
             fi
-            echo "Создаю EAS-проект slug=zezar-app в аккаунте $ACC_UUID (owner=$OWNER)"
-            eas init --account "$ACC_UUID" --non-interactive
+            eas init --id "$ACC_UUID" --non-interactive > init.log 2>&1 || eas init --account "$ACC_UUID" --non-interactive >> init.log 2>&1
+            echo "eas init rc=$?"
+            cat init.log
             git config user.email "ci@zezar.local"; git config user.name "zezar-ci"
             git add app.json && git commit -m "chore(ci): привязка EAS projectId [skip ci]" -q
-            git push origin HEAD:main -q || echo "::warning::не удалось закоммитить projectId — повторное создание проекта при следующем прогоне"
+            git push origin HEAD:main -q || echo "::warning::не удалось закоммитить projectId"
+            set -e
           fi
           # Флаг --output запрещён в EAS CLI для remote-сборок (только local builds),
           # поэтому URL сборки забираем из JSON, который eas пишет в stdout.
