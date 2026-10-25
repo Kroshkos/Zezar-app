@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { ScrollView, Text } from 'react-native';
 import { useAuth } from '../state/AuthContext';
 import { createTask } from '../api/endpoints';
-import { Field, Button, Chip } from '../components/ui';
+import { Field, Button, Chip, ddMmYyyyToIso } from '../components/ui';
 import { colors } from '../theme/colors';
 import { priorityColors } from '../theme/colors';
 
@@ -20,12 +20,13 @@ export default function NewTaskScreen({ navigation }) {
   const submit = async () => {
     setErr('');
     if (title.trim().length < 3) return setErr('Название — не короче 3 символов');
-    if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) return setErr('Срок в формате ГГГГ-ММ-ДД');
+    const dueIso = ddMmYyyyToIso(due);
+    if (dueIso === undefined) return setErr('Срок в формате ДД.ММ.ГГГГ');
     setBusy(true);
     try {
       await createTask({
         title: title.trim(), description: desc.trim(), priority_key: prio,
-        due_date: due || null, department_id: deptId,
+        due_date: dueIso, department_id: deptId,
       });
       navigation.goBack();
     } catch (e) {
@@ -45,7 +46,7 @@ export default function NewTaskScreen({ navigation }) {
           <Chip key={p.key} label={p.label} color={priorityColors[p.key]} active={prio === p.key} onPress={() => setPrio(p.key)} />
         ))}
       </View>
-      <Field label="Срок (ГГГГ-ММ-ДД)" value={due} onChangeText={setDue} placeholder="2026-11-01" autoCapitalize="none" keyboardType="numbers" />
+      <Field label="Срок (ДД.ММ.ГГГГ)" value={due} onChangeText={setDue} placeholder="01.11.2026" autoCapitalize="none" keyboardType="numbers" />
       {data && data.departments.length > 1 ? (
         <>
           <Text style={{ color: colors.inkSoft, fontSize: 13, marginBottom: 6 }}>Пространство</Text>

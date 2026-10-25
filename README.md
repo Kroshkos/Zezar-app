@@ -37,3 +37,10 @@ src/
 `app/routers/token_auth.py` (`/api/auth/token-*`). Авторизация — `Authorization: Bearer <токен>`;
 поддерживается и штатными веб-API (`/api/tasks/api-list`, `/api/core/*`) благодаря гибридной
 авторизации в `app/core/security.py`. Смоук-тест: `scripts/smoke_mobile_api.py`.
+
+## Roadmap (следующие шаги)
+- **v1.1 (текущая сборка)**: экран деталей читает карточку точечно (`GET /api/mobile/entities/{uid}`),
+  ввод срока в привычном формате ДД.ММ.ГГГГ, русские подписи приоритетов.
+- **v1.2**: оффлайн-кэш списка и черновиков (AsyncStorage + очередь мутаций), pull-to-refresh с if-modified.
+- **v1.3**: push-уведомления о назначенных задачах и изменении статуса (expo-notifications + серверный outbox).
+- **v2.0**: тёмная тема, вложения/фото к задачам, голосовой ввод, виджет «мои задачи» на lock-screen.

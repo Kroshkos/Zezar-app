@@ -3,8 +3,8 @@ import React, { useCallback, useState } from 'react';
 import { ScrollView, Text, View, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../state/AuthContext';
-import { listEntities, patchEntity } from '../api/endpoints';
-import { Field, Button, Chip, Sheet, StatusBadge, PriorityBadge, Badge, EmptyState } from '../components/ui';
+import { getEntity, patchEntity } from '../api/endpoints';
+import { Field, Button, Chip, Sheet, StatusBadge, PriorityBadge, Badge, EmptyState, isoToDdMmYyyy, ddMmYyyyToIso } from '../components/ui';
 import { colors, priorityColors } from '../theme/colors';
 import { formatDate, isOverdue } from '../utils/format';
 
@@ -19,9 +19,9 @@ export default function EntityScreen({ route, navigation }) {
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
+    setLoading(true);
     try {
-      const items = await listEntities({ limit: 500 });
-      setItem(items.find((x) => x.uid === uid) || null);
+      setItem(await getEntity(uid));
       setErr('');
     } catch (e) { setErr(e.message); } finally { setLoading(false); }
   }, [uid]);
@@ -73,7 +73,7 @@ export default function EntityScreen({ route, navigation }) {
         <View style={{ marginTop: 20, gap: 10 }}>
           <Button title="Сменить статус" variant="secondary" onPress={() => setSheet('status')} />
           <Button title="Сменить приоритет" variant="secondary" onPress={() => setSheet('priority')} />
-          <Button title="Изменить срок" variant="secondary" onPress={() => { setDraft(item.due_date || ''); setSheet('due'); }} />
+          <Button title="Изменить срок" variant="secondary" onPress={() => { setDraft(isoToDdMmYyyy(item.due_date)); setSheet('due'); }} />
           <Button title="Изменить описание" variant="secondary" onPress={() => { setDraft(item.description || ''); setSheet('desc'); }} />
           {item.kind === 'task' && item.status_key !== 'done' ? (
             <Button title="✔ Отметить выполненной" onPress={() => save({ status_key: 'done' })} loading={saving} />
@@ -99,9 +99,13 @@ export default function EntityScreen({ route, navigation }) {
         ))}
       </Sheet>
 
-      <Sheet visible={sheet === 'due'} onClose={() => setSheet(null)} title="Срок (ГГГГ-ММ-ДД)">
-        <Field value={draft} onChangeText={setDraft} placeholder="2026-11-01" autoCapitalize="none" />
-        <Button title="Сохранить" onPress={() => save({ due_date: draft || null })} loading={saving} />
+      <Sheet visible={sheet === 'due'} onClose={() => setSheet(null)} title="Срок (ДД.ММ.ГГГГ)">
+        <Field value={draft} onChangeText={setDraft} placeholder="01.11.2026" autoCapitalize="none" keyboardType="numbers" />
+        <Button title="Сохранить" onPress={() => {
+          const iso = ddMmYyyyToIso(draft);
+          if (iso === undefined) { setErr('Неверная дата. Формат: ДД.ММ.ГГГГ'); return; }
+          save({ due_date: iso });
+        }} loading={saving} />
       </Sheet>
 
       <Sheet visible={sheet === 'desc'} onClose={() => setSheet(null)} title="Описание">

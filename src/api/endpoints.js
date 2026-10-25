@@ -21,3 +21,7 @@ export const createTask = (payload) =>
 
 export const patchEntity = (uid, payload) =>
   api(`/api/mobile/entities/${encodeURIComponent(uid)}`, { method: 'PATCH', body: payload });
+
+// Одна карточка по uid (быстрый запрос вместо скачивания всего списка)
+export const getEntity = (uid) =>
+  api(`/api/mobile/entities/${encodeURIComponent(uid)}`);

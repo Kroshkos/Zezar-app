@@ -2,6 +2,27 @@
 import React from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
 import { colors, statusColor, priorityColors } from '../theme/colors';
+import { priorityLabel } from '../utils/format';
+
+// «2026-11-01» -> «01.11.2026» для ввода/отображения в мобильных полях
+export function isoToDdMmYyyy(iso) {
+  if (!iso) return '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : String(iso);
+}
+
+// Обратное преобразование; пустая строка -> null; невалидное -> undefined
+export function ddMmYyyyToIso(text) {
+  const t = (text || '').trim().replace(/\./g, '-').replace(/\s+/g, '');
+  if (!t) return null;
+  const m = /^(\d{1,2})-(\d{1,2})-(\d{4})$/.exec(t);
+  if (!m) return undefined;
+  const dd = Number(m[1]), mm = Number(m[2]), yyyy = Number(m[3]);
+  const d = new Date(yyyy, mm - 1, dd);
+  if (Number.isNaN(d.getTime()) || d.getDate() !== dd || d.getMonth() !== mm - 1) return undefined;
+  const p = (n) => String(n).padStart(2, '0');
+  return `${yyyy}-${p(mm)}-${p(dd)}`;
+}
 
 export function Badge({ label, color }) {
   if (!label) return null;
@@ -21,7 +42,7 @@ export function StatusBadge({ statusKey, statuses }) {
 
 export function PriorityBadge({ priorityKey }) {
   if (!priorityKey) return null;
-  return <Badge label={priorityKey} color={priorityColors[priorityKey] || colors.inkSoft} />;
+  return <Badge label={priorityLabel(priorityKey)} color={priorityColors[priorityKey] || colors.inkSoft} />;
 }
 
 export function Field({ label, ...props }) {
