@@ -43,7 +43,7 @@ jobs:
           node-version: '20'
 
       - name: Установка зависимостей
-        run: npm ci || npm install
+        run: npm ci --legacy-peer-deps
 
       - name: Прогон unit-тестов
         run: npm test
