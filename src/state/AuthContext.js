@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import { getServerUrl, getToken, setToken, setServerUrl } from '../api/client';
 import * as api from '../api/endpoints';
+import { clearOfflineState } from '../api/offline';
 
 const AuthCtx = createContext(null);
 export const useAuth = () => useContext(AuthCtx);
@@ -62,6 +63,9 @@ export function AuthProvider({ children }) {
     await setToken('');
     setTokenState('');
     setData(null);
+    // v1.4: очищаем оффлайн-кэш и очередь мутаций этого пользователя,
+    // чтобы данные не «протекали» в сессию другого на том же устройстве.
+    await clearOfflineState();
   }, []);
 
   const value = useMemo(() => ({

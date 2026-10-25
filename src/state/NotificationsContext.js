@@ -11,6 +11,7 @@ import * as Device from 'expo-device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './AuthContext';
 import * as api from '../api/endpoints';
+import { flushQueue, loadQueue } from '../api/offline';
 
 const KEY_LAST_ID = 'zezar.lastEventId';
 
@@ -31,6 +32,7 @@ export function NotificationsProvider({ children }) {
   const [unread, setUnread] = useState(0);
   const [latest, setLatest] = useState([]); // последние события для экрана «События»
   const [pushState, setPushState] = useState({ status: 'idle', expoToken: null }); // idle|granted|denied|unsupported
+  const [pending, setPending] = useState(0); // мутации в локальной очереди (v1.4)
   const pollAbort = useRef(false);
   const sinceIdRef = useRef(0);
 
@@ -62,17 +64,33 @@ export function NotificationsProvider({ children }) {
     }
   }, []);
 
+  // ---------- очередь мутаций (v1.4): фоновый диспатчер ----------
+  const flushBusy = useRef(false);
+  const runFlush = useCallback(async () => {
+    if (flushBusy.current) return;
+    flushBusy.current = true;
+    try {
+      const r = await flushQueue({ sendTask: api.createTask, sendPatch: api.patchEntity });
+      if (r.flushed) setPending(await loadQueue().then((q) => q.length));
+    } finally {
+      flushBusy.current = false;
+    }
+  }, []);
+
   // ---------- старт/остановка потока событий ----------
   const stopPolling = useCallback(() => { pollAbort.current = true; }, []);
 
   const startPolling = useCallback(async () => {
     pollAbort.current = false;
     sinceIdRef.current = Number((await AsyncStorage.getItem(KEY_LAST_ID)) || 0);
+    setPending((await loadQueue()).length);
+    let netOk = true;
     while (!pollAbort.current) {
       try {
         const r = await api.listEvents({ since_id: sinceIdRef.current, wait: 20, limit: 50 });
         if (pollAbort.current) break;
         setUnread(r.unread ?? 0);
+        if (!netOk) { netOk = true; runFlush(); } // связь вернулась — отправляем очередь
         if (r.events && r.events.length) {
           // сервер отдаёт новые сверху; храним в хронологическом порядке
           setLatest((prev) => [...r.events.slice().reverse(), ...prev].slice(0, 100));
@@ -81,15 +99,17 @@ export function NotificationsProvider({ children }) {
         }
       } catch (e) {
         if (e.status === 401) break; // сессия истекла — AuthContext сам разлогинит
+        if (e.status === 0) netOk = false; // сеть недоступна
         await new Promise((res) => setTimeout(res, 15000)); // сеть/ошибка — пауза
       }
     }
-  }, []);
+  }, [runFlush]);
 
   useEffect(() => {
     if (isAuthed) {
       registerPush();
       startPolling();
+      runFlush(); // при запуске пробуем сразу отправить накопленное
     } else {
       stopPolling();
       setUnread(0);
@@ -98,6 +118,13 @@ export function NotificationsProvider({ children }) {
     return stopPolling;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthed, token]);
+
+  // периодический ретрай очереди, пока есть неотправленные мутации
+  useEffect(() => {
+    if (!isAuthed || !pending) return undefined;
+    const t = setInterval(runFlush, 30000);
+    return () => clearInterval(t);
+  }, [isAuthed, pending, runFlush]);
 
   // тап по push-уведомлению → открываем карточку (навигация подписана в App.js)
   const lastResponseSub = useRef(null);
@@ -131,8 +158,8 @@ export function NotificationsProvider({ children }) {
   }, []);
 
   const value = useMemo(() => ({
-    unread, latest, pushState, markAllRead, refreshList, registerPush,
-  }), [unread, latest, pushState, markAllRead, refreshList, registerPush]);
+    unread, latest, pushState, markAllRead, refreshList, registerPush, pending, runFlush,
+  }), [unread, latest, pushState, markAllRead, refreshList, registerPush, pending, runFlush]);
 
   return <NotifCtx.Provider value={value}>{children}</NotifCtx.Provider>;
 }

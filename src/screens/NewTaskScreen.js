@@ -1,8 +1,11 @@
-// Создание задачи через POST /api/mobile/tasks
+// Создание задачи через POST /api/mobile/tasks.
+// v1.4: при недоступном сервере задача кладётся в локальную очередь мутаций
+// и будет отправлена автоматически после восстановления связи.
 import React, { useState } from 'react';
-import { ScrollView, Text } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { useAuth } from '../state/AuthContext';
 import { createTask } from '../api/endpoints';
+import { enqueue } from '../api/offline';
 import { Field, Button, Chip, ddMmYyyyToIso } from '../components/ui';
 import { colors } from '../theme/colors';
 import { priorityColors } from '../theme/colors';
@@ -23,14 +26,20 @@ export default function NewTaskScreen({ navigation }) {
     const dueIso = ddMmYyyyToIso(due);
     if (dueIso === undefined) return setErr('Срок в формате ДД.ММ.ГГГГ');
     setBusy(true);
+    const payload = {
+      title: title.trim(), description: desc.trim(), priority_key: prio,
+      due_date: dueIso, department_id: deptId,
+    };
     try {
-      await createTask({
-        title: title.trim(), description: desc.trim(), priority_key: prio,
-        due_date: dueIso, department_id: deptId,
-      });
+      await createTask(payload);
       navigation.goBack();
     } catch (e) {
-      setErr(e.message);
+      if (e.status === 0 || e.status === undefined) {
+        await enqueue('task', payload);
+        navigation.goBack();
+      } else {
+        setErr(e.message);
+      }
     } finally {
       setBusy(false);
     }

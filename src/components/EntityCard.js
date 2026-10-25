@@ -27,6 +27,7 @@ export default function EntityCard({ item, statuses, onPress }) {
           <Badge label={'⏰ ' + formatDate(item.due_date)} color={overdue ? colors.danger : colors.inkSoft} />
         ) : null}
         {!item.can_edit ? <Badge label="только чтение" color="#94a3b8" /> : null}
+        {item.local ? <Badge label="⏳ без сети, будет отправлено" color="#b45309" /> : null}
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
         <Text style={{ fontSize: 12, color: colors.inkSoft }} numberOfLines={1}>

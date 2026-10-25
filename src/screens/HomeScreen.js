@@ -4,6 +4,7 @@ import { View, Text, ScrollView, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../state/AuthContext';
 import { listEntities } from '../api/endpoints';
+import { cachedRead, mergeLocalTasks } from '../api/offline';
 import { colors } from '../theme/colors';
 import { EmptyState } from '../components/ui';
 
@@ -12,11 +13,17 @@ const ROLE_LABELS = { admin: 'Администратор', coordinator: 'Коо�
 export default function HomeScreen({ navigation }) {
   const { data, refresh } = useAuth();
   const [stats, setStats] = useState(null);
+  const [offline, setOffline] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadStats = useCallback(async () => {
     try {
-      const items = await listEntities({ module_key: 'tasks', limit: 500 });
+      const res = await cachedRead(
+        () => listEntities({ module_key: 'tasks', limit: 500 }),
+        'entities:tasks:',
+      );
+      const items = mergeLocalTasks(res.data, 'tasks');
+      setOffline(!!res.offline);
       const open = items.filter((t) => t.status_key !== 'done' && t.status_key !== 'canceled');
       const mine = open.filter((t) => t.responsibles && data && t.responsibles.some(
         (r) => r.toLowerCase().includes((data.me.name || '').split(' ')[0].toLowerCase())));
@@ -41,6 +48,13 @@ export default function HomeScreen({ navigation }) {
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }}
                 contentContainerStyle={{ padding: 16 }}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+      {offline ? (
+        <View style={{ backgroundColor: '#fef3c7', borderRadius: 10, padding: 10, marginBottom: 12 }}>
+          <Text style={{ color: '#92400e', fontSize: 12, fontWeight: '600' }}>
+            ⚠ Нет связи с сервером — показан последний снимок данных.
+          </Text>
+        </View>
+      ) : null}
       <View style={{ backgroundColor: colors.ink, borderRadius: 18, padding: 18, marginBottom: 14 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: me.color || colors.primary, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>

@@ -1,9 +1,13 @@
-// Детали карточки: статус/приоритет/срок/описание — с сохранением через PATCH
+// Детали карточки: статус/приоритет/срок/описание — с сохранением через PATCH.
+// v1.4: оффлайн — читаем последний снимок из кэша; мутации при недоступном
+// сервере попадают в локальную очередь и применяются оптимистично.
 import React, { useCallback, useState } from 'react';
 import { ScrollView, Text, View, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../state/AuthContext';
 import { getEntity, patchEntity } from '../api/endpoints';
+import { cachedRead, enqueue, optimisticPatchToCache, localEntityOverlay } from '../api/offline';
 import { Field, Button, Chip, Sheet, StatusBadge, PriorityBadge, Badge, EmptyState, isoToDdMmYyyy, ddMmYyyyToIso } from '../components/ui';
 import { colors, priorityColors } from '../theme/colors';
 import { formatDate, isOverdue } from '../utils/format';
@@ -13,6 +17,7 @@ export default function EntityScreen({ route, navigation }) {
   const { data } = useAuth();
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [offline, setOffline] = useState(false);
   const [err, setErr] = useState('');
   const [sheet, setSheet] = useState(null); // 'status' | 'priority' | 'due' | 'desc'
   const [draft, setDraft] = useState('');
@@ -21,8 +26,29 @@ export default function EntityScreen({ route, navigation }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setItem(await getEntity(uid));
-      setErr('');
+      if (route.params.local) {
+        // Локальная (ещё не отправленная) задача — берём её из очереди
+        const q = JSON.parse((await AsyncStorage.getItem('zezar.mutations.v1')) || '[]');
+        const m = q.find((x) => x.id === uid);
+        if (m) {
+          setItem({
+            uid, local: true, kind: 'task', module_key: 'tasks',
+            title: m.payload.title, description: m.payload.description || '',
+            status_key: 'new', priority_key: m.payload.priority_key || 'medium',
+            due_date: m.payload.due_date || null,
+            responsibles: [], executors: [], tags: [], perm: 'owner', can_edit: true,
+          });
+          setOffline(true); setErr(''); return;
+        }
+      }
+      const res = await cachedRead(() => getEntity(uid), `entity:${uid}`);
+      let view = res.data;
+      // поверх кэша накладываем самый свежий неотправленный патч из очереди
+      const overlay = await localEntityOverlay(uid);
+      if (overlay) view = { ...view, ...Object.fromEntries(Object.entries(overlay).filter(([, v]) => v !== undefined)) };
+      setItem(view);
+      setOffline(!!res.offline);
+      setErr(res.offline ? '' : '');
     } catch (e) { setErr(e.message); } finally { setLoading(false); }
   }, [uid]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -32,8 +58,21 @@ export default function EntityScreen({ route, navigation }) {
     try {
       const updated = await patchEntity(uid, payload);
       setItem(updated);
+      setOffline(false);
+      await AsyncStorage.setItem('zezar.cache.entity:' + uid, JSON.stringify({ ts: Date.now(), data: updated }));
       setSheet(null);
-    } catch (e) { setErr(e.message); } finally { setSaving(false); }
+    } catch (e) {
+      if (e.status === 0 || e.status === undefined) {
+        // сервер недоступен — в очередь + оптимистично в UI и кэш списка
+        await enqueue('patch', payload, uid);
+        setItem((prev) => ({ ...prev, ...Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined)) }));
+        await optimisticPatchToCache(uid, payload);
+        setOffline(true);
+        setSheet(null);
+      } else {
+        setErr(e.message);
+      }
+    } finally { setSaving(false); }
   };
 
   if (loading) return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="large" color={colors.primary} /></View>;
@@ -45,6 +84,13 @@ export default function EntityScreen({ route, navigation }) {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: 16 }}>
+      {offline ? (
+        <View style={{ backgroundColor: '#fef3c7', borderRadius: 10, padding: 10, marginBottom: 12 }}>
+          <Text style={{ color: '#92400e', fontSize: 12, fontWeight: '600' }}>
+            ⚠ Нет связи с сервером. Данные могут быть устаревшими, изменения сохранятся локально и отправятся позже.
+          </Text>
+        </View>
+      ) : null}
       <Text style={{ fontSize: 22, fontWeight: '800', color: colors.ink }}>{item.title}</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
         <StatusBadge statusKey={item.status_key} statuses={statuses} />

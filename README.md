@@ -29,11 +29,13 @@ npx expo start        # отсканируйте QR-код через Expo Go
 ## Структура
 ```
 src/
-  api/        client.js (fetch + Bearer), endpoints.js (REST мобильного контура)
-  state/      AuthContext.js (сессия + bootstrap), NotificationsContext.js (push + long-poll лента)
+  api/        client.js (fetch + Bearer), endpoints.js (REST мобильного контура),
+              offline.js (v1.4: кэш GET в AsyncStorage + очередь мутаций с ретраями)
+  state/      AuthContext.js (сессия + bootstrap), NotificationsContext.js (push + long-poll лента + диспатчер очереди)
   screens/    Login, Home, Tasks, Events, NewTask, Entity, Profile
   components/ ui.js, EntityCard.js
   theme/ utils/
+tests/        offline.test.js (unit-тесты оффлайн-модуля, `npm test`)
 ```
 
 ## Соответствие API
@@ -43,8 +45,12 @@ src/
 авторизации в `app/core/security.py`. Смоук-тест: `scripts/smoke_mobile_api.py`.
 
 ## Roadmap (следующие шаги)
-- **v1.1 (текущая сборка)**: экран деталей читает карточку точечно (`GET /api/mobile/entities/{uid}`),
+- **v1.1**: экран деталей читает карточку точечно (`GET /api/mobile/entities/{uid}`),
   ввод срока в привычном формате ДД.ММ.ГГГГ, русские подписи приоритетов.
-- **v1.3 (текущая сборка)**: push через Expo + лента событий (реализовано; бэкенд: MobileEvent, push_worker).
-- **v1.4**: оффлайн-кэш списка и черновиков (AsyncStorage + очередь мутаций), повтор отправки при потере сети.
+- **v1.3**: push через Expo + лента событий (бэкенд: MobileEvent, push_worker).
+- **v1.4 (текущая сборка)**: оффлайн — кэш списков/карточек в AsyncStorage (баннер «нет сети»,
+  последний снимок доступен для чтения), очередь мутаций: создание задач и правки карточек
+  выполняются optimistic-locally и автоматически досылаются диспатчером после восстановления
+  связи (ретраи, отбраковка логических ошибок после 5 попыток); очистка кэша при выходе из аккаунта;
+  unit-тесты модуля offline (`npm test`).
 - **v2.0**: тёмная тема, вложения/фото к задачам, голосовой ввод, виджет «мои задачи» на lock-screen.

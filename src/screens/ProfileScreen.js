@@ -2,6 +2,7 @@
 import React from 'react';
 import { View, Text, ScrollView, Alert } from 'react-native';
 import { useAuth } from '../state/AuthContext';
+import { useNotifications } from '../state/NotificationsContext';
 import { Button } from '../components/ui';
 import { colors } from '../theme/colors';
 
@@ -9,6 +10,7 @@ const ROLE_LABELS = { admin: 'Администратор', coordinator: 'Коо�
 
 export default function ProfileScreen() {
   const { data, serverUrl, logout } = useAuth();
+  const { pending, runFlush } = useNotifications();
   if (!data) return null;
   const me = data.me;
 
@@ -47,6 +49,17 @@ export default function ProfileScreen() {
 
       <Card title="Модули">
         {data.modules.map((m) => <Line key={m.key} k={m.icon || '▫'} v={m.title} />)}
+      </Card>
+
+      <Card title="Оффлайн-очередь">
+        {pending ? (
+          <>
+            <Line k="Неотправлено" v={`${pending} измен. ждут связи`} />
+            <Button title="Отправить сейчас" variant="secondary" onPress={runFlush} />
+          </>
+        ) : (
+          <Text style={{ color: colors.inkSoft }}>Всё синхронизировано с сервером ✓</Text>
+        )}
       </Card>
 
       <View style={{ marginTop: 10 }}>
