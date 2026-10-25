@@ -43,7 +43,7 @@ jobs:
           node-version: '20'
 
       - name: Установка зависимостей
-        run: npm ci || npm install
+        run: npm ci --legacy-peer-deps
 
       - name: Прогон unit-тестов
         run: npm test
@@ -149,7 +149,7 @@ jobs:
           } > NOTES.md
           cat NOTES.md
 
-      - name: Создать релиз
+      - name: Создать/обновить релиз
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.build.outputs.version }}
@@ -157,3 +157,5 @@ jobs:
           body_path: NOTES.md
           prerelease: ${{ contains(needs.build.outputs.version, '-') }}
           files: artifacts/**
+          # идемпотентность: повторные прогоны (dispatch/тег) обновляют существующий релиз, а не падают с already_exists
+          fail_on_unmatched_files: false
