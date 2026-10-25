@@ -2,7 +2,7 @@
   "expo": {
     "name": "ЦЕЗАРЬ",
     "slug": "zezar-app",
-    "version": "1.0.0",
+    "version": "0.1.0-alpha.1",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
@@ -10,13 +10,15 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "app.zezar.mobile"
+      "bundleIdentifier": "app.zezar.mobile",
+      "buildNumber": "100"
     },
     "android": {
       "package": "app.zezar.mobile",
       "adaptiveIcon": {
         "backgroundColor": "#0f172a"
-      }
+      },
+      "versionCode": 100
     },
     "extra": {
       "defaultServerUrl": "https://zezar.example.com"
