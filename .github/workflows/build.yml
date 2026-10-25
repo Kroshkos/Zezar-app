@@ -77,6 +77,23 @@ jobs:
             *-*) PROFILE="preview" ;;     # alpha/beta — установочный APK
             *)     PROFILE="production" ;; # стабильная — AAB для Play
           esac
+          # EAS project: если projectId не закоммичен (eas init на машине разработки),
+          # создаём проект robot-токеном. --account принимает и логин, и UUID аккаунта,
+          # поэтому сначала резолвим логин токена в UUID через Expo API.
+          if ! grep -q '"extra"' app.json 2>/dev/null || ! grep -q 'eas.projectId' app.json 2>/dev/null; then
+            ACC_UUID=$(curl -sf -H "Authorization: Bearer $EXPO_TOKEN" \
+              "https://api.expo.dev/graphql" -H "content-type: application/json" \
+              -d '{"query":"query { me { username accounts { id name } } }"}' | node -e "
+                let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
+                  const j=JSON.parse(d); const a=(j.data.me.accounts||[])[0];
+                  if(!a){console.error('no accounts:\n'+d);process.exit(1);}
+                  process.stdout.write(a.id);});")
+            echo "Создаю EAS-проект slug=zezar-app в аккаунте $ACC_UUID"
+            eas init --account "$ACC_UUID" --non-interactive
+            git config user.email "ci@zezar.local"; git config user.name "zezar-ci"
+            git add app.json && git commit -m "chore(ci): привязка EAS projectId [skip ci]" -q
+            git push origin HEAD:main -q || echo "::warning::не удалось закоммитить projectId — повторное создание проекта при следующем прогоне"
+          fi
           # Флаг --output запрещён в EAS CLI для remote-сборок (только local builds),
           # поэтому URL сборки забираем из JSON, который eas пишет в stdout.
           # 2>&1 намеренно склеивает stderr с stdout: если сборка упадёт, её текст
