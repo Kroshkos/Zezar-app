@@ -3,6 +3,7 @@ import React from 'react';
 import { View, Text, ScrollView, Alert } from 'react-native';
 import { useAuth } from '../state/AuthContext';
 import { useNotifications } from '../state/NotificationsContext';
+import { useUpdate, APP_VERSION } from '../state/UpdateContext';
 import { Button } from '../components/ui';
 import { colors } from '../theme/colors';
 
@@ -11,6 +12,7 @@ const ROLE_LABELS = { admin: 'Администратор', coordinator: 'Коо�
 export default function ProfileScreen() {
   const { data, serverUrl, logout } = useAuth();
   const { pending, runFlush } = useNotifications();
+  const { update, promptInstall, checkNow } = useUpdate();
   if (!data) return null;
   const me = data.me;
 
@@ -38,6 +40,16 @@ export default function ProfileScreen() {
           <Text style={{ color: '#92400e' }}>⚠ Требуется смена пароля — сделайте это в веб-версии Цезаря.</Text>
         </View>
       ) : null}
+
+      <Card title="Приложение">
+        <Line k="Версия" v={APP_VERSION} />
+        {update ? (
+          <Button title={`⬆ Обновиться до ${update.version}`} onPress={promptInstall} />
+        ) : (
+          <Text style={{ color: colors.inkSoft, marginTop: 4 }}>Установлена актуальная версия ✓</Text>
+        )}
+        <Button title="Проверить обновления" variant="secondary" onPress={() => checkNow({ force: true })} />
+      </Card>
 
       <Card title="Сервер">
         <Line k="Название" v={data.server.name} />
@@ -68,7 +80,7 @@ export default function ProfileScreen() {
         <Button title="Выйти" variant="danger" onPress={doLogout} />
       </View>
       <Text style={{ color: '#94a3b8', fontSize: 12, textAlign: 'center', marginTop: 24 }}>
-        Zezar-app · мобильный клиент системы «ЦЕЗАРЬ»
+        Zezar-app v{APP_VERSION} · мобильный клиент системы «ЦЕЗАРЬ»
       </Text>
     </ScrollView>
   );

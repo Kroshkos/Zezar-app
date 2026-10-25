@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './state/AuthContext';
 import { NotificationsProvider, useNotifications } from './state/NotificationsContext';
 import { LinkingProvider } from './state/LinkingContext';
+import { UpdateProvider, useUpdate } from './state/UpdateContext';
 import EventsScreen from './screens/EventsScreen';
 import { ScreenErrorBoundary } from './components/ui';
 import { colors } from './theme/colors';
@@ -67,6 +68,20 @@ function GuestBanner() {
   );
 }
 
+// v1.6: баннер доступного обновления (тап = скачать APK со страницы релиза)
+function UpdateBanner() {
+  const { update, promptInstall, dismiss } = useUpdate();
+  if (!update) return null;
+  return (
+    <View style={{ backgroundColor: '#dbeafe', paddingHorizontal: 14, paddingVertical: 8, flexDirection: 'row', alignItems: 'center' }}>
+      <Text style={{ color: '#1e40af', fontSize: 12, flex: 1, fontWeight: '600' }} onPress={promptInstall}>
+        ⬆ Доступна версия {update.version} — нажмите, чтобы обновить
+      </Text>
+      <Text style={{ color: '#1e40af', fontSize: 12, paddingLeft: 10 }} onPress={dismiss}>✕</Text>
+    </View>
+  );
+}
+
 function Root() {
   const { booting, isAuthed, guest } = useAuth();
   const navRef = React.useRef(null);
@@ -93,6 +108,7 @@ function Root() {
   }
   return (
     <NavigationContainer ref={navRef} theme={navTheme}>
+      <UpdateBanner />
       {guest ? <GuestBanner /> : null}
       <ScreenErrorBoundary>
         <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: colors.ink }, headerTintColor: '#fff' }}>
@@ -115,12 +131,14 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <NotificationsProvider>
-          <LinkingProvider>
-            <StatusBar style="light" />
-            <Root />
-          </LinkingProvider>
-        </NotificationsProvider>
+        <UpdateProvider>
+          <NotificationsProvider>
+            <LinkingProvider>
+              <StatusBar style="light" />
+              <Root />
+            </LinkingProvider>
+          </NotificationsProvider>
+        </UpdateProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

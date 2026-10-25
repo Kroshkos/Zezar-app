@@ -1,7 +1,7 @@
 // Глобальное состояние: сессия (токен) + bootstrap-данные сервера
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getServerUrl, getToken, setToken, setServerUrl } from '../api/client';
+import { getServerUrl, getToken, setToken, setServerUrl, normalizeUrl } from '../api/client';
 import * as api from '../api/endpoints';
 import { clearOfflineState } from '../api/offline';
 
@@ -88,7 +88,16 @@ export function AuthProvider({ children }) {
     } else {
       await AsyncStorage.removeItem(KEY_MAIN_SESSION); // вход «с нуля» — возвращаться некуда
     }
-    if (baseUrl) { await setServerUrl(baseUrl); setServerUrlState(await getServerUrl()); }
+    // baseUrl из https-ссылки имеет приоритет только если он СОВПАДАЕТ с уже
+    // настроенным сервером: QR может вести на тестовый/чужой стенд — уводить
+    // туда пользователя с его прод-сессией нельзя. При расхождении остаёмся
+    // на текущем сервере (гостевой токен всё равно обменяется, т.к. секреты
+    // разные — в этом случае пользователь увидит понятную ошибку).
+    if (baseUrl && prevUrl && normalizeUrl(baseUrl) === normalizeUrl(prevUrl)) {
+      // тот же сервер — ничего не меняем
+    } else if (baseUrl && !prevUrl) {
+      await setServerUrl(baseUrl); setServerUrlState(await getServerUrl());
+    }
     const r = await api.guestLogin(guestToken);
     await setToken(r.access_token);
     setTokenState(r.access_token);

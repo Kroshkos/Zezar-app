@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "ЦЕЗАРЬ",
+    "name": "\u0426\u0415\u0417\u0410\u0420\u042c",
     "slug": "zezar-app",
-    "version": "0.1.0-alpha.2",
+    "version": "0.1.0-alpha.4",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
@@ -18,7 +18,28 @@
       "adaptiveIcon": {
         "backgroundColor": "#0f172a"
       },
-      "versionCode": 100
+      "versionCode": 100,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "zezar-patfiz.waw0.amvera.tech",
+              "pathPrefix": "/open/e/"
+            },
+            {
+              "scheme": "https",
+              "host": "open.zezar.app"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "extra": {
       "defaultServerUrl": "https://zezar.example.com",
