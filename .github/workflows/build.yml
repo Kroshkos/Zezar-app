@@ -129,11 +129,26 @@ jobs:
             --json > build.json 2>&1 || { cat build.json; exit 1; }
           cat build.json
           URL=$(node -e "
-            const t=require('fs').readFileSync('build.json','utf8');
-            const i=t.indexOf('{'); if(i<0){console.error(t);process.exit(1);}
-            const j=JSON.parse(t.slice(i));
-            const u=(Array.isArray(j)?j[0]:j).artifacts?.build?.downloadUrl;
-            if(!u){console.error('Не найден downloadUrl:\n'+t);process.exit(1);}
+            // eas build --json пишет массив объектов сборки (или один объект),
+            // иногда с мусором/несколькими JSON подряд до/после — берём первый валидный.
+            const raw=require('fs').readFileSync('build.json','utf8');
+            const s=raw.search(/[[{]/);
+            if(s<0){console.error(raw);process.exit(1);}
+            let data=null;
+            try { data=JSON.parse(raw.slice(s)); }
+            catch(e){
+              // fallback: вырезать первый полный JSON-массив/объект по балансу скобок
+              const open=raw[s]; const close=open==='['?']':'}';
+              let d=0,end=-1;
+              for(let i=s;i<raw.length;i++){ if(raw[i]===open)d++; else if(raw[i]===close){d--; if(d===0){end=i+1;break;}} }
+              if(end<0){console.error(raw);process.exit(1);}
+              try{data=JSON.parse(raw.slice(s,end));}catch(e2){console.error(raw);process.exit(1);}
+            }
+            const b=Array.isArray(data)?data[0]:data;
+            if(b.status && b.status!=='FINISHED'){console.error('Сборка не завершилась успешно:',JSON.stringify(b.error||b.status));process.exit(1);}
+            const ar=b.artifacts||{};
+            const u=ar.downloadUrl || ar.buildUrl || ar.applicationArchiveUrl || (ar.build&&ar.build.downloadUrl);
+            if(!u){console.error('Не найден URL артефакта:\n'+raw);process.exit(1);}
             process.stdout.write(u);
           ")
           echo "BUILD_URL=$URL" >> "$GITHUB_ENV"
