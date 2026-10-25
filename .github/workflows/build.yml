@@ -78,37 +78,40 @@ jobs:
             *)     PROFILE="production" ;; # стабильная — AAB для Play
           esac
           # EAS project: если projectId не закоммичен, создаём проект robot-токеном.
-          # Аккаунт резолвим через Expo GraphQL (доступен и для robot-токенов),
-          # приоритет — owner из app.json. set -e временно отключаем, чтобы видеть
-          # реальный код возврата каждого шага и печатать содержимое ответов в лог.
+          # Robot-токены Expo (EXPO_TOKEN) НЕ имеют доступа к GraphQL me/accounts —
+          # поэтому аккаунт берём из переменной секретов EXPO_ACCOUNT (логин или UUID),
+          # а существование/создание проекта проверяем через публичный v2 API по slug.
+          set +e
           if ! grep -q 'projectId' app.json 2>/dev/null; then
-            set +e
             OWNER=$(node -e "console.log(JSON.parse(require('fs').readFileSync('app.json','utf8')).expo.owner||'')")
-            echo "owner=$OWNER"
-            curl -sf --max-time 20 -H "Authorization: Bearer $EXPO_TOKEN" \
-              "https://api.expo.dev/graphql" -H "content-type: application/json" \
-              -d '{"query":"query { accounts { id name } }"}' > acc.json
-            echo "graphql rc=$? resp=$(head -c 400 acc.json)"
-            ACC_UUID=$(node -e "
-              const fs=require('fs');
-              let j; try{j=JSON.parse(fs.readFileSync('acc.json','utf8'));}catch(e){process.exit(0);}
-              const accs=(j.data&&j.data.accounts)||[];
-              const want=process.env.OWNER;
-              const a=accs.find(x=>x.name===want)||accs[0];
-              if(a)process.stdout.write(a.id);")
-            echo "ACC_UUID=$ACC_UUID"
-            if [ -z "$ACC_UUID" ]; then
-              echo "::error::Не удалось определить Expo-аккаунт по EXPO_TOKEN (см. resp выше)."
+            SLUG=$(node -e "console.log(JSON.parse(require('fs').readFileSync('app.json','utf8')).expo.slug)")
+            ACC="${{ secrets.EXPO_ACCOUNT }}"
+            [ -z "$ACC" ] && ACC="$OWNER"
+            if [ -z "$ACC" ]; then
+              echo "::error::Не задан ни owner в app.json, ни секрет EXPO_ACCOUNT."
               exit 1
             fi
-            eas init --id "$ACC_UUID" --non-interactive > init.log 2>&1 || eas init --account "$ACC_UUID" --non-interactive >> init.log 2>&1
+            # Проект уже существует? (публичный endpoint, авторизация не обязательна)
+            PID=$(curl -sf --max-time 20 "https://api.expo.dev/v2/projects/$ACC/$SLUG" | node -e "
+              let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{process.stdout.write(JSON.parse(d).projectId||'');}catch(e){}});")
+            if [ -n "$PID" ]; then
+              echo "Проект найден: $PID — привязываю без создания"
+              eas init --id "$PID" --non-interactive > init.log 2>&1
+            else
+              echo "Проекта нет — создаю в аккаунте $ACC"
+              eas init --account "$ACC" --non-interactive > init.log 2>&1
+            fi
             echo "eas init rc=$?"
             cat init.log
+            if ! grep -q 'projectId' app.json; then
+              echo "::error::eas init не смог создать/привязать проект. Если токен robot-типа и аккаунт "$ACC" ему неизвестен — выполните один раз локально: eas login && eas init (в корне Zezar-app) и закоммитьте extra.eas.projectId в app.json."
+              exit 1
+            fi
             git config user.email "ci@zezar.local"; git config user.name "zezar-ci"
             git add app.json && git commit -m "chore(ci): привязка EAS projectId [skip ci]" -q
-            git push origin HEAD:main -q || echo "::warning::не удалось закоммитить projectId"
-            set -e
+            git push origin HEAD:main -q || echo "::warning::не удалось закоммитить projectId (нет прав contents:write у GITHUB_TOKEN)"
           fi
+          set -e
           # Флаг --output запрещён в EAS CLI для remote-сборок (только local builds),
           # поэтому URL сборки забираем из JSON, который eas пишет в stdout.
           # 2>&1 намеренно склеивает stderr с stdout: если сборка упадёт, её текст
