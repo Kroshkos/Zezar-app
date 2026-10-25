@@ -21,7 +21,10 @@
       "versionCode": 100
     },
     "extra": {
-      "defaultServerUrl": "https://zezar.example.com"
+      "defaultServerUrl": "https://zezar.example.com",
+      "eas": {
+        "projectId": "0f79ff51-659e-4b80-bb7e-55b2087ad6a9"
+      }
     },
     "plugins": [
       [
