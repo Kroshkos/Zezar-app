@@ -13,6 +13,10 @@ React Native (Expo) приложение к сервису [Zezar](https://githu
 - **Создание задачи** (`POST /api/mobile/tasks`) и **редактирование** статуса/приоритета/срока/
   описания прямо из карточки (`PATCH /api/mobile/entities/{uid}`), включая быстрый экшен
   «Отметить выполненной». Права на редактирование приходят с сервера (`can_edit`).
+- **События и push**: вкладка «События» (🔔) показывает ленту `GET /api/mobile/events` (long-poll),
+  счётчик непрочитанных на иконке вкладки; Expo Push-токен устройства регистрируется на сервере
+  (`POST /api/mobile/push/register`) — назначения, смены статусов и напоминания о сроках приходят
+  как системные уведомления. Тап по push открывает карточку задачи. При выходе подписка деактивируется.
 - **Профиль**: сведения о сервере, выходе из аккаунта с отзывом токена (`POST /api/auth/token-revoke`).
 
 ## Запуск
@@ -26,8 +30,8 @@ npx expo start        # отсканируйте QR-код через Expo Go
 ```
 src/
   api/        client.js (fetch + Bearer), endpoints.js (REST мобильного контура)
-  state/      AuthContext.js (сессия + bootstrap)
-  screens/    Login, Home, Tasks, NewTask, Entity, Profile
+  state/      AuthContext.js (сессия + bootstrap), NotificationsContext.js (push + long-poll лента)
+  screens/    Login, Home, Tasks, Events, NewTask, Entity, Profile
   components/ ui.js, EntityCard.js
   theme/ utils/
 ```
@@ -41,6 +45,6 @@ src/
 ## Roadmap (следующие шаги)
 - **v1.1 (текущая сборка)**: экран деталей читает карточку точечно (`GET /api/mobile/entities/{uid}`),
   ввод срока в привычном формате ДД.ММ.ГГГГ, русские подписи приоритетов.
-- **v1.2**: оффлайн-кэш списка и черновиков (AsyncStorage + очередь мутаций), pull-to-refresh с if-modified.
-- **v1.3**: push-уведомления о назначенных задачах и изменении статуса (expo-notifications + серверный outbox).
+- **v1.3 (текущая сборка)**: push через Expo + лента событий (реализовано; бэкенд: MobileEvent, push_worker).
+- **v1.4**: оффлайн-кэш списка и черновиков (AsyncStorage + очередь мутаций), повтор отправки при потере сети.
 - **v2.0**: тёмная тема, вложения/фото к задачам, голосовой ввод, виджет «мои задачи» на lock-screen.

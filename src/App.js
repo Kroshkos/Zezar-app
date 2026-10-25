@@ -7,6 +7,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './state/AuthContext';
+import { NotificationsProvider, useNotifications } from './state/NotificationsContext';
+import EventsScreen from './screens/EventsScreen';
 import { colors } from './theme/colors';
 import LoginScreen from './screens/LoginScreen';
 import HomeScreen from './screens/HomeScreen';
@@ -24,6 +26,7 @@ const navTheme = {
 };
 
 function MainTabs() {
+  const { unread } = useNotifications();
   return (
     <Tab.Navigator
       screenOptions={{
@@ -36,6 +39,12 @@ function MainTabs() {
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Главная', tabBarLabel: 'Главная', tabBarIcon: ({ color }) => <View><Text style={{ color, fontSize: 18 }}>⚔</Text></View> }} />
       <Tab.Screen name="Tasks" component={TasksScreen} options={{ title: 'Задачи', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>🗂</Text> }} />
+      <Tab.Screen name="Events" component={EventsScreen} options={{
+        title: 'События',
+        tabBarBadge: unread || undefined,
+        tabBarBadgeStyle: { backgroundColor: colors.primary },
+        tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>🔔</Text>,
+      }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Профиль', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>👤</Text> }} />
     </Tab.Navigator>
   );
@@ -43,6 +52,13 @@ function MainTabs() {
 
 function Root() {
   const { booting, isAuthed } = useAuth();
+  const navRef = React.useRef(null);
+  React.useEffect(() => {
+    globalThis.__zezarDeepLink = (uid) => {
+      try { navRef.current && navRef.current.navigate('Entity', { uid }); } catch (_) {}
+    };
+    return () => { globalThis.__zezarDeepLink = null; };
+  }, []);
   if (booting) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.ink }}>
@@ -52,7 +68,7 @@ function Root() {
     );
   }
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer ref={navRef} theme={navTheme}>
       <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: colors.ink }, headerTintColor: '#fff' }}>
         {isAuthed ? (
           <>
@@ -72,8 +88,10 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <StatusBar style="light" />
-        <Root />
+        <NotificationsProvider>
+          <StatusBar style="light" />
+          <Root />
+        </NotificationsProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

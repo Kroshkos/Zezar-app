@@ -34,7 +34,7 @@ export class ApiError extends Error {
   }
 }
 
-export async function api(path, { method = 'GET', body, auth = true } = {}) {
+export async function api(path, { method = 'GET', body, auth = true, timeoutMs } = {}) {
   const base = await getServerUrl();
   if (!base) throw new ApiError(0, 'Сервер не настроен');
   const headers = { 'Content-Type': 'application/json' };
@@ -42,15 +42,27 @@ export async function api(path, { method = 'GET', body, auth = true } = {}) {
     const token = await getToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;
   }
+  // таймаут (для long-poll запросов ленты событий)
+  let signal, timer;
+  if (timeoutMs) {
+    const ctrl = new AbortController();
+    timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    signal = ctrl.signal;
+  }
   let resp;
   try {
     resp = await fetch(base + path, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
     });
   } catch (e) {
-    throw new ApiError(0, 'Сеть недоступна. Проверьте адрес сервера и соединение');
+    throw new ApiError(0, e && e.name === 'AbortError'
+      ? 'Превышено время ожидания ответа'
+      : 'Сеть недоступна. Проверьте адрес сервера и соединение');
+  } finally {
+    if (timer) clearTimeout(timer);
   }
   if (resp.status === 401 && auth) {
     throw new ApiError(401, 'Сессия недействительна — войдите заново');

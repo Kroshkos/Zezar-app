@@ -48,6 +48,16 @@ export function AuthProvider({ children }) {
   }, [loadBootstrap]);
 
   const logout = useCallback(async () => {
+    // деактивируем push-подписку этого устройства (лучше effort)
+    try {
+      const Notifications = require('expo-notifications');
+      const Device = require('expo-device');
+      if (Device.isDevice) {
+        const t = await Notifications.getExpoPushTokenAsync();
+        const expo_token = t.data || String(t);
+        await api.pushUnregister(expo_token);
+      }
+    } catch (_) { /* подписки мог не быть */ }
     try { await api.logout(); } catch (_) { /* токен мог быть уже отозван */ }
     await setToken('');
     setTokenState('');

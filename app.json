@@ -8,8 +8,26 @@
     "splash": {
       "backgroundColor": "#0f172a"
     },
-    "ios": { "supportsTablet": false, "bundleIdentifier": "app.zezar.mobile" },
-    "android": { "package": "app.zezar.mobile", "adaptiveIcon": { "backgroundColor": "#0f172a" } },
-    "extra": { "defaultServerUrl": "https://zezar.example.com" }
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.zezar.mobile"
+    },
+    "android": {
+      "package": "app.zezar.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#0f172a"
+      }
+    },
+    "extra": {
+      "defaultServerUrl": "https://zezar.example.com"
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "color": "#d97706"
+        }
+      ]
+    ]
   }
 }
