@@ -34,12 +34,12 @@ export class ApiError extends Error {
   }
 }
 
-export async function api(path, { method = 'GET', body, auth = true, timeoutMs } = {}) {
-  const base = await getServerUrl();
+export async function api(path, { method = 'GET', body, auth = true, timeoutMs, baseUrl, tokenOverride } = {}) {
+  const base = baseUrl || await getServerUrl();
   if (!base) throw new ApiError(0, 'Сервер не настроен');
   const headers = { 'Content-Type': 'application/json' };
   if (auth) {
-    const token = await getToken();
+    const token = tokenOverride || await getToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;
   }
   // таймаут (для long-poll запросов ленты событий)

@@ -126,18 +126,8 @@ export function NotificationsProvider({ children }) {
     return () => clearInterval(t);
   }, [isAuthed, pending, runFlush]);
 
-  // тап по push-уведомлению → открываем карточку (навигация подписана в App.js)
-  const lastResponseSub = useRef(null);
-  useEffect(() => {
-    lastResponseSub.current = Notifications.addNotificationResponseReceivedListener((resp) => {
-      const uid = resp?.notification?.request?.content?.data?.entity_uid;
-      if (uid) {
-        globalThis.__zezarDeepLink && globalThis.__zezarDeepLink(uid);
-      }
-    });
-    return () => lastResponseSub.current &&
-      Notifications.removeNotificationSubscription(lastResponseSub.current);
-  }, []);
+  // тап по push-уведомлению обрабатывает LinkingContext (v1.5) — единый
+  // обработчик deep link для QR-ссылок и уведомлений.
 
   const markAllRead = useCallback(async () => {
     try {

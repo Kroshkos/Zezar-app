@@ -14,7 +14,7 @@ import { formatDate, isOverdue } from '../utils/format';
 
 export default function EntityScreen({ route, navigation }) {
   const { uid } = route.params;
-  const { data } = useAuth();
+  const { data, guest, exitGuest } = useAuth();
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [offline, setOffline] = useState(false);
@@ -89,6 +89,18 @@ export default function EntityScreen({ route, navigation }) {
           <Text style={{ color: '#92400e', fontSize: 12, fontWeight: '600' }}>
             ⚠ Нет связи с сервером. Данные могут быть устаревшими, изменения сохранятся локально и отправятся позже.
           </Text>
+        </View>
+      ) : null}
+      {guest ? (
+        <View style={{ backgroundColor: '#dbeafe', borderRadius: 10, padding: 10, marginBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ color: '#1e40af', fontSize: 12, fontWeight: '600', flex: 1 }}>
+            🔗 Открыто по QR-коду карточки
+          </Text>
+          <Text style={{ color: '#1d4ed8', fontSize: 12, fontWeight: '700' }} onPress={async () => {
+            const back = await exitGuest();
+            if (!back) globalThis.__zezarResetNav && globalThis.__zezarResetNav();
+            else navigation.goBack();
+          }}> Выйти ↩</Text>
         </View>
       ) : null}
       <Text style={{ fontSize: 22, fontWeight: '800', color: colors.ink }}>{item.title}</Text>

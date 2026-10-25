@@ -8,6 +8,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './state/AuthContext';
 import { NotificationsProvider, useNotifications } from './state/NotificationsContext';
+import { LinkingProvider } from './state/LinkingContext';
 import EventsScreen from './screens/EventsScreen';
 import { colors } from './theme/colors';
 import LoginScreen from './screens/LoginScreen';
@@ -50,14 +51,36 @@ function MainTabs() {
   );
 }
 
+function GuestBanner() {
+  const { exitGuest } = useAuth();
+  return (
+    <View style={{ backgroundColor: '#fef3c7', paddingHorizontal: 14, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Text style={{ color: '#92400e', fontSize: 12, flex: 1, fontWeight: '600' }}>
+        ⚔ Открыто по QR-коду карточки (гостевой доступ)
+      </Text>
+      <Text style={{ color: '#b45309', fontSize: 12, fontWeight: '700' }} onPress={async () => {
+        const back = await exitGuest();
+        if (!back) globalThis.__zezarResetNav && globalThis.__zezarResetNav();
+      }}> Вернуться ↩</Text>
+    </View>
+  );
+}
+
 function Root() {
-  const { booting, isAuthed } = useAuth();
+  const { booting, isAuthed, guest } = useAuth();
   const navRef = React.useRef(null);
   React.useEffect(() => {
     globalThis.__zezarDeepLink = (uid) => {
-      try { navRef.current && navRef.current.navigate('Entity', { uid }); } catch (_) {}
+      try {
+        const nav = navRef.current;
+        if (!nav || !nav.isReady()) return; // стек ещё не смонтирован — LinkingContext поставит в очередь
+        nav.navigate('Entity', { uid });
+      } catch (_) {}
     };
-    return () => { globalThis.__zezarDeepLink = null; };
+    globalThis.__zezarResetNav = () => {
+      try { navRef.current && navRef.current.reset({ index: 0, routes: [{ name: isAuthed ? 'Main' : 'Login' }] }); } catch (_) {}
+    };
+    return () => { globalThis.__zezarDeepLink = null; globalThis.__zezarResetNav = null; };
   }, []);
   if (booting) {
     return (
@@ -69,6 +92,7 @@ function Root() {
   }
   return (
     <NavigationContainer ref={navRef} theme={navTheme}>
+      {guest ? <GuestBanner /> : null}
       <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: colors.ink }, headerTintColor: '#fff' }}>
         {isAuthed ? (
           <>
@@ -89,8 +113,10 @@ export default function App() {
     <SafeAreaProvider>
       <AuthProvider>
         <NotificationsProvider>
-          <StatusBar style="light" />
-          <Root />
+          <LinkingProvider>
+            <StatusBar style="light" />
+            <Root />
+          </LinkingProvider>
         </NotificationsProvider>
       </AuthProvider>
     </SafeAreaProvider>

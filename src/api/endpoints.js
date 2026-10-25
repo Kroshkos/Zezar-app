@@ -1,10 +1,21 @@
 // Тонкая обёртка над REST-эндпоинтами мобильного контура Zezar
-import { api } from './client';
+import { api, getServerUrl } from './client';
 
-export const login = (login_, password) =>
-  api('/api/auth/token-login', { method: 'POST', body: { login: login_, password }, auth: false });
+// baseUrl — опциональный явный адрес сервера (deep link из QR может прийти
+// с другого хоста, чем сохранённый; по умолчанию — текущий настроенный)
+async function resolveBase(baseUrl) {
+  return (baseUrl || await getServerUrl());
+}
+
+export const login = async (login_, password, baseUrl) =>
+  api('/api/auth/token-login', { method: 'POST', body: { login: login_, password }, auth: false, baseUrl: await resolveBase(baseUrl) });
 
 export const logout = () => api('/api/auth/token-revoke', { method: 'POST' });
+
+// QR-шлюз v1.5: обмен одноразового гостевого токена из deep link
+// zezar://entity/{uid}?t=<token> на обычный Bearer access_token
+export const guestLogin = async (token, baseUrl) =>
+  api('/api/mobile/guest-login', { method: 'POST', body: { token }, auth: false, baseUrl: await resolveBase(baseUrl) });
 
 export const bootstrap = () => api('/api/mobile/bootstrap');
 
@@ -25,6 +36,11 @@ export const patchEntity = (uid, payload) =>
 // Одна карточка по uid (быстрый запрос вместо скачивания всего списка)
 export const getEntity = (uid) =>
   api(`/api/mobile/entities/${encodeURIComponent(uid)}`);
+
+// Карточка по uid с явным токеном — используется сразу после обмена
+// гостевого QR-токена, когда сохранённый Bearer ещё не обновлён
+export const getEntityWithToken = (uid, tokenOverride) =>
+  api(`/api/mobile/entities/${encodeURIComponent(uid)}`, { tokenOverride });
 
 // ---------- Push-подписки (Expo) ----------
 export const pushRegister = (expo_token, platform, device_label) =>
