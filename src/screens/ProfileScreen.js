@@ -17,7 +17,9 @@ export default function ProfileScreen() {
   const doLogout = () => {
     Alert.alert('Выйти?', 'Токен этого устройства будет отозван на сервере.', [
       { text: 'Отмена', style: 'cancel' },
-      { text: 'Выйти', style: 'destructive', onPress: logout },
+      // v1.5.2: «Выйти и забыть» стирает сохранённые логин/пароль автозаполнения
+      { text: 'Выйти и забыть', onPress: () => logout({ forgetMe: true }) },
+      { text: 'Выйти', style: 'destructive', onPress: () => logout() },
     ]);
   };
 

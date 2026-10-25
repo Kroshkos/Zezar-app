@@ -77,6 +77,29 @@ export function Button({ title, onPress, variant = 'primary', disabled, loading 
   );
 }
 
+// Чекбокс (например «Запомнить меня» на экране входа)
+export function Checkbox({ label, checked, onChange }) {
+  return (
+    <TouchableOpacity
+      onPress={() => onChange(!checked)}
+      style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+    >
+      <View
+        style={{
+          width: 22, height: 22, borderRadius: 6, marginRight: 10, alignItems: 'center', justifyContent: 'center',
+          borderWidth: 1.5, borderColor: checked ? colors.primary : colors.line,
+          backgroundColor: checked ? colors.primary : colors.card,
+        }}
+      >
+        {checked ? <Text style={{ color: '#fff', fontSize: 14, lineHeight: 17, fontWeight: '800' }}>✓</Text> : null}
+      </View>
+      <Text style={{ color: colors.ink, fontSize: 15 }}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
 export function Chip({ label, active, onPress, color }) {
   return (
     <TouchableOpacity

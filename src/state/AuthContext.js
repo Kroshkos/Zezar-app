@@ -6,6 +6,25 @@ import * as api from '../api/endpoints';
 import { clearOfflineState } from '../api/offline';
 
 const KEY_MAIN_SESSION = 'zezar.mainSession.v15'; // { serverUrl, token } — основная сессия под гостевым доступом
+const KEY_REMEMBERED = 'zezar.remembered.v1'; // { serverUrl, login, pass } — «Запомнить меня» на экране входа
+
+// Хранилище запомненных учётных данных.
+// ВНИМАНИЕ: AsyncStorage не шифруется (в Expo Go SecureStore недоступен), поэтому
+// пароли лежат в открытом виде на устройстве — это осознанный компромисс для UX
+// «автозаполнения»; включается только по явному чекбоксу пользователя и стирается
+// при выходе из аккаунта без флага / при снятии флага.
+export async function saveRemembered({ serverUrl, login, pass }) {
+  try { await AsyncStorage.setItem(KEY_REMEMBERED, JSON.stringify({ serverUrl, login, pass })); } catch (_) {}
+}
+export async function loadRemembered() {
+  try {
+    const raw = await AsyncStorage.getItem(KEY_REMEMBERED);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) { return null; }
+}
+export async function clearRemembered() {
+  try { await AsyncStorage.removeItem(KEY_REMEMBERED); } catch (_) {}
+}
 
 const AuthCtx = createContext(null);
 export const useAuth = () => useContext(AuthCtx);
@@ -47,12 +66,15 @@ export function AuthProvider({ children }) {
     })();
   }, [loadBootstrap]);
 
-  const login = useCallback(async (url, log, pass) => {
+  const login = useCallback(async (url, log, pass, remember = false) => {
     await setServerUrl(url.trim());
     setServerUrlState(await getServerUrl());
     const r = await api.login(log, pass);
     await setToken(r.access_token);
     setTokenState(r.access_token);
+    // v1.5.2 «Запомнить меня»: сохраняем/стираем учётные данные после успешного входа
+    if (remember) await saveRemembered({ serverUrl: url.trim(), login: log, pass });
+    else await clearRemembered();
     return await loadBootstrap();
   }, [loadBootstrap]);
 
@@ -97,7 +119,7 @@ export function AuthProvider({ children }) {
     return false;
   }, [loadBootstrap]);
 
-  const logout = useCallback(async () => {
+  const logout = useCallback(async ({ forgetMe } = {}) => {
     // деактивируем push-подписку этого устройства (лучше effort)
     try {
       const Notifications = require('expo-notifications');
@@ -114,6 +136,9 @@ export function AuthProvider({ children }) {
     setData(null);
     setGuest(false);
     await AsyncStorage.removeItem(KEY_MAIN_SESSION); // гостевую сессию тоже выбрасываем
+    // v1.5.2: «Забыть меня» при выходе — стираем сохранённые учётные данные;
+    // без флага выходим «как есть», чтобы экран входа остался автозаполненным.
+    if (forgetMe) await clearRemembered();
     // v1.4: очищаем оффлайн-кэш и очередь мутаций этого пользователя,
     // чтобы данные не «протекали» в сессию другого на том же устройстве.
     await clearOfflineState();

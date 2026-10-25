@@ -1,17 +1,37 @@
 // Экран входа: адрес сервера + логин/пароль учётной записи Цезаря
-import React, { useState } from 'react';
+// v1.5.2: чекбокс «Запомнить меня» + автозаполнение сохранённых данных
+import React, { useState, useEffect } from 'react';
 import { View, Text, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { useAuth } from '../state/AuthContext';
-import { Field, Button } from '../components/ui';
+import { useAuth, loadRemembered } from '../state/AuthContext';
+import { Field, Button, Checkbox } from '../components/ui';
 import { colors } from '../theme/colors';
+
+const DEFAULT_SERVER_URL = 'https://zezar-patfiz.waw0.amvera.tech';
 
 export default function LoginScreen() {
   const { serverUrl, login } = useAuth();
   const [url, setUrl] = useState(serverUrl || '');
   const [log, setLog] = useState('');
   const [pass, setPass] = useState('');
+  const [remember, setRemember] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+
+  // Автозаполнение: подтягиваем сохранённые при прошлом входе данные
+  useEffect(() => {
+    (async () => {
+      const saved = await loadRemembered();
+      if (saved) {
+        setUrl(saved.serverUrl || '');
+        setLog(saved.login || '');
+        setPass(saved.pass || '');
+        setRemember(true);
+      } else {
+        setUrl((prev) => prev || serverUrl || DEFAULT_SERVER_URL);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const submit = async () => {
     setErr('');
@@ -19,7 +39,7 @@ export default function LoginScreen() {
     if (!log.trim() || !pass) return setErr('Введите логин и пароль');
     setBusy(true);
     try {
-      const ok = await login(url, log, pass);
+      const ok = await login(url, log, pass, remember);
       if (!ok) setErr('Сервер недоступен или данные не подошли');
     } catch (e) {
       setErr(e.message || 'Ошибка входа');
@@ -37,12 +57,16 @@ export default function LoginScreen() {
         </Text>
         <Field label="Адрес сервера" value={url} onChangeText={setUrl} autoCapitalize="none"
                keyboardType="url" placeholder="https://zezar.example.com" />
-        <Field label="Логин" value={log} onChangeText={setLog} autoCapitalize="none" placeholder="ivanov" />
-        <Field label="Пароль" value={pass} onChangeText={setPass} secureTextEntry placeholder="••••••••" />
+        <Field label="Логин" value={log} onChangeText={setLog} autoCapitalize="none" autoCorrect={false}
+               autoComplete="username" textContentType="username" placeholder="ivanov" />
+        <Field label="Пароль" value={pass} onChangeText={setPass} secureTextEntry
+               autoComplete="password" textContentType="password" placeholder="••••••••" />
+        <Checkbox label="Запомнить меня" checked={remember} onChange={setRemember} />
         {err ? <Text style={{ color: colors.danger, marginBottom: 10 }}>{err}</Text> : null}
         <Button title="Войти" onPress={submit} loading={busy} disabled={busy} />
         <Text style={{ color: '#94a3b8', fontSize: 12, textAlign: 'center', marginTop: 18 }}>
-          Используются ваша учётная запись и права из веб-версии. Токен хранится на устройстве.
+          Используются ваша учётная запись и права из веб-версии. Токен хранится на устройстве.{'\n'}
+          «Запомнить меня» сохраняет логин и пароль в памяти приложения — используйте только на личном устройстве.
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>
