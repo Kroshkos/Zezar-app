@@ -11,14 +11,17 @@ import EntityCard from '../components/EntityCard';
 import { Chip, EmptyState } from '../components/ui';
 import { colors } from '../theme/colors';
 
-export default function TasksScreen({ navigation }) {
+export default function TasksScreen({ navigation, route }) {
   const { data } = useAuth();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [offline, setOffline] = useState(false);
   const [err, setErr] = useState('');
   const [q, setQ] = useState('');
-  const [moduleKey, setModuleKey] = useState('tasks');
+  // v1.5.1: главный экран передаёт module_key через params (клик по модулю)
+  const [moduleKey, setModuleKey] = useState(route.params?.module_key ?? 'tasks');
+  // v1.5.1: быстрый фильтр со сводной («В работе» / «Мои» / «Просрочено»)
+  const [filter, setFilter] = useState(route.params?.filter ?? null);
 
   const load = useCallback(async () => {
     setLoading(true); setErr('');
@@ -27,16 +30,37 @@ export default function TasksScreen({ navigation }) {
         () => listEntities({ module_key: moduleKey || undefined, q: q || undefined, limit: 300 }),
         `entities:${moduleKey || 'all'}:${q || ''}`,
       );
-      setItems(mergeLocalTasks(res.data, moduleKey));
+      let list = mergeLocalTasks(res.data, moduleKey);
+      if (filter) {
+        const meName = (data && data.me && data.me.name ? data.me.name : '').split(' ')[0].toLowerCase();
+        const isOpen = (t) => t.status_key !== 'done' && t.status_key !== 'canceled';
+        if (filter === 'open') list = list.filter(isOpen);
+        else if (filter === 'overdue') list = list.filter((t) => isOpen(t) && t.due_date && new Date(t.due_date) < new Date(new Date().toDateString()));
+        else if (filter === 'mine') list = list.filter((t) => isOpen(t) && t.responsibles && meName &&
+          t.responsibles.some((r) => r.toLowerCase().includes(meName)));
+      }
+      setItems(list);
       setOffline(!!res.offline);
     } catch (e) {
       setErr(e.message);
     } finally {
       setLoading(false);
     }
-  }, [moduleKey, q]);
+  }, [moduleKey, q, filter, data]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // переход с главной по клику на модуль/счётчик: применяем параметры навигации
+  const paramMod = route.params?.module_key;
+  const paramFilter = route.params?.filter;
+  React.useEffect(() => {
+    if (paramMod !== undefined && paramMod !== moduleKey) setModuleKey(paramMod);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramMod]);
+  React.useEffect(() => {
+    if (paramFilter !== undefined && paramFilter !== filter) setFilter(paramFilter || null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramFilter]);
 
   const modules = useMemo(() => (data ? data.modules : []), [data]);
   const statuses = data && data.statuses ? (data.statuses.task || []) : [];
@@ -62,6 +86,13 @@ export default function TasksScreen({ navigation }) {
             <Chip key={m.key} label={m.title} active={moduleKey === m.key} onPress={() => setModuleKey(m.key)} />
           ))}
         </View>
+        {filter ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+            <Chip label={{ open: 'только в работе', mine: 'только мои', overdue: 'только просроченные' }[filter] || filter}
+                  active onPress={() => setFilter(null)} />
+            <Text style={{ color: '#94a3b8', fontSize: 12, marginLeft: 8 }}>фильтр со сводной — нажмите, чтобы снять</Text>
+          </View>
+        ) : null}
       </View>
 
       {err ? <EmptyState icon="⚠️" text={err} /> : (

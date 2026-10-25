@@ -119,3 +119,29 @@ export function EmptyState({ icon, text }) {
     </View>
   );
 }
+
+// v1.5.1: общий boundary — падение любого экрана показывает экран-заглушку
+// с кнопкой «Перезагрузить», а не крашит всё приложение.
+export class ScreenErrorBoundary extends React.Component {
+  state = { error: null };
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error) { console.warn('screen crashed:', error?.message || error); }
+  render() {
+    if (this.state.error) {
+      return (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg, padding: 24 }}>
+          <Text style={{ fontSize: 40, marginBottom: 12 }}>🛡</Text>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: colors.ink, marginBottom: 6 }}>Что-то пошло не так</Text>
+          <Text style={{ color: colors.inkSoft, fontSize: 13, textAlign: 'center', marginBottom: 18 }}>
+            Экран упал: {String(this.state.error?.message || this.state.error)}. Данные на сервере в безопасности.
+          </Text>
+          <TouchableOpacity onPress={() => this.setState({ error: null })}
+                            style={{ backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 }}>
+            <Text style={{ color: '#fff', fontWeight: '700' }}>Попробовать снова</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}

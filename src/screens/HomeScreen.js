@@ -1,6 +1,6 @@
 // Главная: сводка "кто я / где работаю" + быстрые счётчики задач
 import React, { useCallback, useState } from 'react';
-import { View, Text, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../state/AuthContext';
 import { listEntities } from '../api/endpoints';
@@ -73,15 +73,17 @@ export default function HomeScreen({ navigation }) {
       <Text style={{ fontSize: 17, fontWeight: '700', color: colors.ink, marginBottom: 10 }}>Задачи</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
         {[
-          { k: 'open', label: 'В работе', v: stats && stats.open, c: colors.accent },
-          { k: 'mine', label: 'Мои', v: stats && stats.mine, c: colors.primary },
-          { k: 'overdue', label: 'Просрочено', v: stats && stats.overdue, c: colors.danger },
-          { k: 'total', label: 'Всего', v: stats && stats.total, c: colors.inkSoft },
+          { k: 'open', label: 'В работе', v: stats && stats.open, c: colors.accent, f: 'open' },
+          { k: 'mine', label: 'Мои', v: stats && stats.mine, c: colors.primary, f: 'mine' },
+          { k: 'overdue', label: 'Просрочено', v: stats && stats.overdue, c: colors.danger, f: 'overdue' },
+          { k: 'total', label: 'Всего', v: stats && stats.total, c: colors.inkSoft, f: null },
         ].map((s) => (
-          <View key={s.k} style={{ width: '47%', backgroundColor: colors.card, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: colors.line }}>
+          <TouchableOpacity key={s.k} onPress={() => navigation.navigate('Tasks', s.f ? { filter: s.f } : {})}
+                            activeOpacity={0.7}
+                            style={{ width: '47%', backgroundColor: colors.card, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: colors.line }}>
             <Text style={{ fontSize: 26, fontWeight: '800', color: s.c }}>{s.v == null ? '—' : s.v}</Text>
-            <Text style={{ color: colors.inkSoft, fontSize: 13 }}>{s.label}</Text>
-          </View>
+            <Text style={{ color: colors.inkSoft, fontSize: 13 }}>{s.label} ›</Text>
+          </TouchableOpacity>
         ))}
       </View>
 
@@ -97,9 +99,11 @@ export default function HomeScreen({ navigation }) {
       <Text style={{ fontSize: 17, fontWeight: '700', color: colors.ink, marginTop: 20, marginBottom: 10 }}>Модули</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {data.modules.map((m) => (
-          <View key={m.key} style={{ backgroundColor: colors.card, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: colors.line }}>
-            <Text style={{ color: colors.inkSoft, fontSize: 13 }}>{m.icon || '▫'} {m.title}</Text>
-          </View>
+          <TouchableOpacity key={m.key} activeOpacity={0.7}
+                            onPress={() => navigation.navigate('Tasks', { module_key: m.key })}
+                            style={{ backgroundColor: colors.card, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: colors.line }}>
+            <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '600' }}>{m.icon || '▫'} {m.title} ›</Text>
+          </TouchableOpacity>
         ))}
       </View>
     </ScrollView>

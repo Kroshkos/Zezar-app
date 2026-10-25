@@ -10,6 +10,7 @@ import { AuthProvider, useAuth } from './state/AuthContext';
 import { NotificationsProvider, useNotifications } from './state/NotificationsContext';
 import { LinkingProvider } from './state/LinkingContext';
 import EventsScreen from './screens/EventsScreen';
+import { ScreenErrorBoundary } from './components/ui';
 import { colors } from './theme/colors';
 import LoginScreen from './screens/LoginScreen';
 import HomeScreen from './screens/HomeScreen';
@@ -93,17 +94,19 @@ function Root() {
   return (
     <NavigationContainer ref={navRef} theme={navTheme}>
       {guest ? <GuestBanner /> : null}
-      <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: colors.ink }, headerTintColor: '#fff' }}>
-        {isAuthed ? (
-          <>
-            <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
-            <Stack.Screen name="NewTask" component={NewTaskScreen} options={{ title: 'Новая задача' }} />
-            <Stack.Screen name="Entity" component={EntityScreen} options={{ title: 'Карточка' }} />
-          </>
-        ) : (
-          <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
-        )}
-      </Stack.Navigator>
+      <ScreenErrorBoundary>
+        <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: colors.ink }, headerTintColor: '#fff' }}>
+          {isAuthed ? (
+            <>
+              <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
+              <Stack.Screen name="NewTask" component={NewTaskScreen} options={{ title: 'Новая задача' }} />
+              <Stack.Screen name="Entity" component={EntityScreen} options={{ title: 'Карточка' }} />
+            </>
+          ) : (
+            <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+          )}
+        </Stack.Navigator>
+      </ScreenErrorBoundary>
     </NavigationContainer>
   );
 }
