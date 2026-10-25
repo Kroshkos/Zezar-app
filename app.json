@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "ЦЕЗАРЬ",
+    "slug": "zezar-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#0f172a"
+    },
+    "ios": { "supportsTablet": false, "bundleIdentifier": "app.zezar.mobile" },
+    "android": { "package": "app.zezar.mobile", "adaptiveIcon": { "backgroundColor": "#0f172a" } },
+    "extra": { "defaultServerUrl": "https://zezar.example.com" }
+  }
+}

@@ -1,0 +1,122 @@
+// Детали карточки: статус/приоритет/срок/описание — с сохранением через PATCH
+import React, { useCallback, useState } from 'react';
+import { ScrollView, Text, View, ActivityIndicator } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { useAuth } from '../state/AuthContext';
+import { listEntities, patchEntity } from '../api/endpoints';
+import { Field, Button, Chip, Sheet, StatusBadge, PriorityBadge, Badge, EmptyState } from '../components/ui';
+import { colors, priorityColors } from '../theme/colors';
+import { formatDate, isOverdue } from '../utils/format';
+
+export default function EntityScreen({ route, navigation }) {
+  const { uid } = route.params;
+  const { data } = useAuth();
+  const [item, setItem] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState('');
+  const [sheet, setSheet] = useState(null); // 'status' | 'priority' | 'due' | 'desc'
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const items = await listEntities({ limit: 500 });
+      setItem(items.find((x) => x.uid === uid) || null);
+      setErr('');
+    } catch (e) { setErr(e.message); } finally { setLoading(false); }
+  }, [uid]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const save = async (payload) => {
+    setSaving(true); setErr('');
+    try {
+      const updated = await patchEntity(uid, payload);
+      setItem(updated);
+      setSheet(null);
+    } catch (e) { setErr(e.message); } finally { setSaving(false); }
+  };
+
+  if (loading) return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="large" color={colors.primary} /></View>;
+  if (!item) return <EmptyState icon="🤷" text={err || 'Карточка не найдена (возможно, удалена)'} />;
+
+  const statuses = (data && data.statuses && data.statuses[item.kind]) || [];
+  const priorities = (data && data.priorities) || [];
+  const overdue = isOverdue(item.due_date) && item.status_key !== 'done';
+
+  return (
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: 16 }}>
+      <Text style={{ fontSize: 22, fontWeight: '800', color: colors.ink }}>{item.title}</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+        <StatusBadge statusKey={item.status_key} statuses={statuses} />
+        <PriorityBadge priorityKey={item.priority_key} />
+        {item.due_date ? <Badge label={'⏰ ' + formatDate(item.due_date)} color={overdue ? colors.danger : colors.inkSoft} /> : null}
+      </View>
+
+      <View style={{ backgroundColor: colors.card, borderRadius: 14, padding: 14, marginTop: 16, borderWidth: 1, borderColor: colors.line }}>
+        <Row k="Модуль" v={item.module_key} />
+        <Row k="Ответственный" v={item.responsibles.length ? item.responsibles.join(', ') : '—'} />
+        {item.executors.length ? <Row k="Исполнители" v={item.executors.join(', ')} /> : null}
+        {item.tags.length ? <Row k="Метки" v={item.tags.join(', ')} /> : null}
+        <Row k="Доступ" v={item.perm + (item.can_edit ? ' (можно редактировать)' : ' (только чтение)')} last />
+      </View>
+
+      <Text style={{ fontSize: 17, fontWeight: '700', color: colors.ink, marginTop: 20, marginBottom: 6 }}>Описание</Text>
+      <View style={{ backgroundColor: colors.card, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: colors.line }}>
+        <Text style={{ color: item.description ? colors.ink : '#94a3b8', fontSize: 15 }}>
+          {item.description || 'Пусто. Нажмите «Изменить описание».'}
+        </Text>
+      </View>
+
+      {err ? <Text style={{ color: colors.danger, marginTop: 12 }}>{err}</Text> : null}
+
+      {item.can_edit ? (
+        <View style={{ marginTop: 20, gap: 10 }}>
+          <Button title="Сменить статус" variant="secondary" onPress={() => setSheet('status')} />
+          <Button title="Сменить приоритет" variant="secondary" onPress={() => setSheet('priority')} />
+          <Button title="Изменить срок" variant="secondary" onPress={() => { setDraft(item.due_date || ''); setSheet('due'); }} />
+          <Button title="Изменить описание" variant="secondary" onPress={() => { setDraft(item.description || ''); setSheet('desc'); }} />
+          {item.kind === 'task' && item.status_key !== 'done' ? (
+            <Button title="✔ Отметить выполненной" onPress={() => save({ status_key: 'done' })} loading={saving} />
+          ) : null}
+        </View>
+      ) : (
+        <Text style={{ color: '#94a3b8', marginTop: 20 }}>Редактирование недоступно для вашей роли.</Text>
+      )}
+
+      {/* --- bottom sheets --- */}
+      <Sheet visible={sheet === 'status'} onClose={() => setSheet(null)} title="Статус">
+        {statuses.map((s) => (
+          <Chip key={s.key} label={s.label} color={s.color} active={item.status_key === s.key}
+                onPress={() => save({ status_key: s.key })} />
+        ))}
+        {!statuses.length ? <Text style={{ color: colors.inkSoft }}>Справочник пуст на сервере.</Text> : null}
+      </Sheet>
+
+      <Sheet visible={sheet === 'priority'} onClose={() => setSheet(null)} title="Приоритет">
+        {priorities.map((p) => (
+          <Chip key={p.key} label={p.label} color={priorityColors[p.key]} active={item.priority_key === p.key}
+                onPress={() => save({ priority_key: p.key })} />
+        ))}
+      </Sheet>
+
+      <Sheet visible={sheet === 'due'} onClose={() => setSheet(null)} title="Срок (ГГГГ-ММ-ДД)">
+        <Field value={draft} onChangeText={setDraft} placeholder="2026-11-01" autoCapitalize="none" />
+        <Button title="Сохранить" onPress={() => save({ due_date: draft || null })} loading={saving} />
+      </Sheet>
+
+      <Sheet visible={sheet === 'desc'} onClose={() => setSheet(null)} title="Описание">
+        <Field value={draft} onChangeText={setDraft} multiline numberOfLines={5} />
+        <Button title="Сохранить" onPress={() => save({ description: draft })} loading={saving} />
+      </Sheet>
+    </ScrollView>
+  );
+}
+
+function Row({ k, v, last }) {
+  return (
+    <View style={{ flexDirection: 'row', paddingVertical: 8, borderBottomWidth: last ? 0 : 1, borderBottomColor: '#f1f5f9' }}>
+      <Text style={{ width: 120, color: colors.inkSoft, fontSize: 14 }}>{k}</Text>
+      <Text style={{ flex: 1, color: colors.ink, fontSize: 14 }}>{String(v)}</Text>
+    </View>
+  );
+}
