@@ -37,10 +37,11 @@ jobs:
           fi
           echo "version=${V#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Node 20
+      # EAS CLI требует Node >= 22 (на Node 20 печатает предупреждение о deprecated)
+      - name: Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Установка зависимостей
         run: npm ci --legacy-peer-deps
@@ -76,8 +77,24 @@ jobs:
             *-*) PROFILE="preview" ;;     # alpha/beta — установочный APK
             *)     PROFILE="production" ;; # стабильная — AAB для Play
           esac
+          # Флаг --output запрещён в EAS CLI для remote-сборок (только local builds),
+          # поэтому URL сборки забираем из JSON, который eas пишет в stdout.
+          # 2>&1 намеренно склеивает stderr с stdout: если сборка упадёт, её текст
+          # всё равно попадёт в лог Actions и будет видна причина.
           eas build --platform android --profile "$PROFILE" --non-interactive \
-            --output ./zezar-android.apk
+            --json > build.json 2>&1 || { cat build.json; exit 1; }
+          cat build.json
+          URL=$(node -e "
+            const t=require('fs').readFileSync('build.json','utf8');
+            const i=t.indexOf('{'); if(i<0){console.error(t);process.exit(1);}
+            const j=JSON.parse(t.slice(i));
+            const u=(Array.isArray(j)?j[0]:j).artifacts?.build?.downloadUrl;
+            if(!u){console.error('Не найден downloadUrl:\n'+t);process.exit(1);}
+            process.stdout.write(u);
+          ")
+          echo "BUILD_URL=$URL" >> "$GITHUB_ENV"
+          curl -fL --retry 3 -o zezar-android.apk "$URL"
+          ls -la zezar-android.apk
 
       - name: Пакет Expo Update (OTA, если настроен канал)
         if: env.HAS_TOKEN == '1'
