@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "\u0426\u0415\u0417\u0410\u0420\u042c",
+    "name": "ЦЕЗАРЬ",
     "slug": "zezar-app",
     "version": "0.1.0-alpha.5",
     "orientation": "portrait",
@@ -52,6 +52,12 @@
         "expo-notifications",
         {
           "color": "#d97706"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "ЦЕЗАРЬ нужен доступ к камере для сканирования QR-кодов карточек"
         }
       ]
     ],

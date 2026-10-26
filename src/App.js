@@ -11,6 +11,7 @@ import { NotificationsProvider, useNotifications } from './state/NotificationsCo
 import { LinkingProvider } from './state/LinkingContext';
 import { UpdateProvider, useUpdate } from './state/UpdateContext';
 import EventsScreen from './screens/EventsScreen';
+import ScanScreen from './screens/ScanScreen';
 import { ScreenErrorBoundary } from './components/ui';
 import { colors } from './theme/colors';
 import LoginScreen from './screens/LoginScreen';
@@ -42,6 +43,27 @@ function MainTabs() {
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Главная', tabBarLabel: 'Главная', tabBarIcon: ({ color }) => <View><Text style={{ color, fontSize: 18 }}>⚔</Text></View> }} />
       <Tab.Screen name="Tasks" component={TasksScreen} options={{ title: 'Задачи', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>🗂</Text> }} />
+      {/* v1.7: встроенный QR-сканер — кнопка по середине нижнего футера */}
+      <Tab.Screen
+        name="ScanTab"
+        component={() => null}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault(); // сам таб не открывается — редиректим на модалку сканера
+            navigation.navigate('Scan');
+          },
+        })}
+        options={{
+          title: 'Скан',
+          tabBarLabel: 'Скан',
+          tabBarStyle: { backgroundColor: colors.tabBar },
+          tabBarIcon: () => (
+            <View style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginTop: -18, borderWidth: 3, borderColor: colors.tabBar, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 6 }}>
+              <Text style={{ color: '#fff', fontSize: 20 }}>▣</Text>
+            </View>
+          ),
+        }}
+      />
       <Tab.Screen name="Events" component={EventsScreen} options={{
         title: 'События',
         tabBarBadge: unread || undefined,
@@ -117,6 +139,7 @@ function Root() {
               <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
               <Stack.Screen name="NewTask" component={NewTaskScreen} options={{ title: 'Новая задача' }} />
               <Stack.Screen name="Entity" component={EntityScreen} options={{ title: 'Карточка' }} />
+              <Stack.Screen name="Scan" component={ScanScreen} options={{ title: 'Сканер QR', headerStyle: { backgroundColor: '#000' }, headerShadowVisible: false }} />
             </>
           ) : (
             <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
