@@ -1,6 +1,6 @@
 // Корневой компонент: AuthProvider + навигация (публичный/защищённый контуры)
 import React from 'react';
-import { View, Text, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -8,10 +8,11 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './state/AuthContext';
 import { NotificationsProvider, useNotifications } from './state/NotificationsContext';
-import { LinkingProvider } from './state/LinkingContext';
+import { LinkingProvider, useDeepLink } from './state/LinkingContext';
 import { UpdateProvider, useUpdate } from './state/UpdateContext';
 import EventsScreen from './screens/EventsScreen';
-import { ScreenErrorBoundary } from './components/ui';
+import { ScreenErrorBoundary, Button } from './components/ui';
+import QrScannerSheet from './components/QrScannerSheet';
 import { colors } from './theme/colors';
 import LoginScreen from './screens/LoginScreen';
 import HomeScreen from './screens/HomeScreen';
@@ -28,28 +29,56 @@ const navTheme = {
   colors: { ...DefaultTheme.colors, primary: colors.primary, background: colors.bg, card: colors.tabBar, text: colors.ink, border: colors.line },
 };
 
-function MainTabs() {
-  const { unread } = useNotifications();
+// v1.7: круглая кнопка-сканер по центру нижнего футера (между вкладками «Задачи» и «События»)
+function QrTabButton({ onPress }) {
   return (
-    <Tab.Navigator
-      screenOptions={{
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: '#94a3b8',
-        headerStyle: { backgroundColor: colors.ink },
-        headerTintColor: '#fff',
-        headerTitleStyle: { fontWeight: '700' },
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityLabel="Сканировать QR-код"
+      style={{
+        width: 52, height: 52, borderRadius: 26, backgroundColor: colors.primary,
+        alignItems: 'center', justifyContent: 'center', marginBottom: 22,
+        shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 6, shadowOffset: { width: 0, height: 3 },
+        elevation: 6,
       }}
     >
-      <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Главная', tabBarLabel: 'Главная', tabBarIcon: ({ color }) => <View><Text style={{ color, fontSize: 18 }}>⚔</Text></View> }} />
-      <Tab.Screen name="Tasks" component={TasksScreen} options={{ title: 'Задачи', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>🗂</Text> }} />
-      <Tab.Screen name="Events" component={EventsScreen} options={{
-        title: 'События',
-        tabBarBadge: unread || undefined,
-        tabBarBadgeStyle: { backgroundColor: colors.primary },
-        tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>🔔</Text>,
-      }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Профиль', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>👤</Text> }} />
-    </Tab.Navigator>
+      <Text style={{ color: '#fff', fontSize: 24 }}>▣</Text>
+    </TouchableOpacity>
+  );
+}
+
+function MainTabs() {
+  const { unread } = useNotifications();
+  const { handleScannedCode } = useDeepLink();
+  const [scanOpen, setScanOpen] = React.useState(false);
+  return (
+    <>
+      <Tab.Navigator
+        screenOptions={{
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: '#94a3b8',
+          headerStyle: { backgroundColor: colors.ink },
+          headerTintColor: '#fff',
+          headerTitleStyle: { fontWeight: '700' },
+        }}
+      >
+        <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Главная', tabBarLabel: 'Главная', tabBarIcon: ({ color }) => <View><Text style={{ color, fontSize: 18 }}>⚔</Text></View> }} />
+        <Tab.Screen name="Tasks" component={TasksScreen} options={{ title: 'Задачи', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>🗂</Text> }} />
+        {/* пустая вкладка-заглушка под плавающей кнопкой — не переключается */}
+        <Tab.Screen name="QrScan" component={HomeScreen} listeners={{ tabPress: (e) => e.preventDefault() }}
+          options={{ title: '', tabBarButton: () => <QrTabButton onPress={() => setScanOpen(true)} /> }} />
+        <Tab.Screen name="Events" component={EventsScreen} options={{
+          title: 'События',
+          tabBarBadge: unread || undefined,
+          tabBarBadgeStyle: { backgroundColor: colors.primary },
+          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>🔔</Text>,
+        }} />
+        <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Профиль', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>👤</Text> }} />
+      </Tab.Navigator>
+      <QrScannerSheet visible={scanOpen} onClose={() => setScanOpen(false)} onResult={handleScannedCode} />
+    </>
   );
 }
 
@@ -82,6 +111,17 @@ function UpdateBanner() {
   );
 }
 
+function LinkErrorBanner() {
+  const { linkError, clearLinkError } = useDeepLink();
+  if (!linkError) return null;
+  return (
+    <View style={{ backgroundColor: '#fee2e2', paddingHorizontal: 14, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Text style={{ color: colors.danger, fontSize: 12, flex: 1, fontWeight: '600' }}>{linkError}</Text>
+      <Text style={{ color: colors.danger, fontSize: 12, paddingLeft: 10 }} onPress={clearLinkError}>✕</Text>
+    </View>
+  );
+}
+
 function Root() {
   const { booting, isAuthed, guest } = useAuth();
   const navRef = React.useRef(null);
@@ -109,6 +149,7 @@ function Root() {
   return (
     <NavigationContainer ref={navRef} theme={navTheme}>
       <UpdateBanner />
+      <LinkErrorBanner />
       {guest ? <GuestBanner /> : null}
       <ScreenErrorBoundary>
         <Stack.Navigator screenOptions={{ headerStyle: { backgroundColor: colors.ink }, headerTintColor: '#fff' }}>
