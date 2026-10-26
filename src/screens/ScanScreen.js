@@ -3,9 +3,12 @@
 //  - https://<сервер>/open/e/{uid}?t=<гостевой токен> — QR с печатной карточки
 //    на сайте: открываем карточку через гостевую сессию (основная сохраняется);
 //  - zezar://entity/{uid}... — нативный deep link.
+// v1.8: распознавание QR не только живой камерой, но и по фото — «Из галереи»
+// (удобно для распечатанных карточек при плохом освещении/неудачном ракурсе).
 import React, { useRef, useState } from 'react';
 import { View, Text, TextInput, ActivityIndicator, Linking, StyleSheet } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions, scanFromURLAsync } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { extractEntityTarget } from '../state/LinkingContext';
 import { useAuth } from '../state/AuthContext';
 import { getServerUrl, normalizeUrl } from '../api/client';
@@ -16,6 +19,7 @@ export default function ScanScreen({ navigation }) {
   const { guestSession } = useAuth();
   const [message, setMessage] = useState('');
   const [manual, setManual] = useState(null); // null — поле скрыто
+  const [picking, setPicking] = useState(false); // идёт распознавание фото
   const firedRef = useRef(false);
 
   const handleResult = async (url) => {
@@ -50,6 +54,35 @@ export default function ScanScreen({ navigation }) {
     await handleResult(url);
   };
 
+  // v1.8: распознавание QR по фотографии из галереи — CameraView.scanFromURLAsync
+  // (тот же движок Google Vision, что и живой превью). Спасает для печатных
+  // карточек: плохой свет, блики, мелкий код — проще сфотографировать и выбрать.
+  const pickFromGallery = async () => {
+    if (picking || firedRef.current) return;
+    try {
+      const r = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'], quality: 1, allowsMultipleSelection: false,
+      });
+      if (r.canceled || !r.assets?.[0]?.uri) return;
+      setPicking(true);
+      setMessage('Ищем QR-код на фото…');
+      const codes = await scanFromURLAsync(r.assets[0].uri, ['qr']);
+      setPicking(false);
+      const data = codes?.[0]?.data;
+      if (!data) {
+        setMessage('На выбранном фото QR-код не найден — попробуйте другое');
+        setTimeout(() => setMessage(''), 3000);
+        return;
+      }
+      firedRef.current = false; // снимаем блокировку — результат обрабатываем как скан
+      await handleResult(data);
+    } catch (e) {
+      setPicking(false);
+      setMessage(e?.message || 'Не удалось обработать фото');
+      setTimeout(() => setMessage(''), 3000);
+    }
+  };
+
   if (!permission) {
     return <View style={styles.center}><ActivityIndicator color="#fff" size="large" /></View>;
   }
@@ -79,8 +112,15 @@ export default function ScanScreen({ navigation }) {
         <View style={styles.frame} />
       </View>
       <View pointerEvents="box-none" style={styles.bottomPanel}>
-        <Text style={styles.hint}>Наведите камеру на QR-код карточки</Text>
+        <Text style={styles.hint}>Наведите камеру на QR-код карточки ⚔ или выберите его фото</Text>
         {message ? <Text style={styles.err}>{message}</Text> : null}
+        {/* v1.8: крупные кнопки действий над строкой доп. опций */}
+        <View style={styles.actionsRow}>
+          <Text
+            style={[styles.actionBtn, picking && styles.actionBtnDim]}
+            onPress={pickFromGallery}
+          >{picking ? '⏳ Обработка…' : '🖼 Из галереи'}</Text>
+        </View>
         <View style={styles.manualRow}>
           <Text
             style={styles.linkBtn}
@@ -117,6 +157,12 @@ const styles = StyleSheet.create({
   frame: { width: 240, height: 240, borderRadius: 22, borderWidth: 3, borderColor: 'rgba(217,119,6,.9)' },
   bottomPanel: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 14, paddingHorizontal: 16, paddingBottom: 24, backgroundColor: 'rgba(15,23,42,.85)' },
   hint: { color: '#e2e8f0', textAlign: 'center', marginBottom: 8, fontSize: 13, fontWeight: '600' },
+  actionsRow: { flexDirection: 'row', justifyContent: 'center', marginBottom: 8 },
+  actionBtn: {
+    backgroundColor: colors.primary, color: '#fff', fontWeight: '700', fontSize: 14,
+    paddingHorizontal: 26, paddingVertical: 12, borderRadius: 14, overflow: 'hidden',
+  },
+  actionBtnDim: { opacity: 0.6 },
   manualRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
   linkBtn: { color: '#93c5fd', fontSize: 12, fontWeight: '600' },
   manualToggle: { color: '#94a3b8', fontSize: 12 },

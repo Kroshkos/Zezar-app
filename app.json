@@ -2,7 +2,7 @@
   "expo": {
     "name": "ЦЕЗАРЬ",
     "slug": "zezar-app",
-    "version": "0.1.0-alpha.6",
+    "version": "0.1.0-alpha.7",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
@@ -18,7 +18,7 @@
       "adaptiveIcon": {
         "backgroundColor": "#0f172a"
       },
-      "versionCode": 101,
+      "versionCode": 100,
       "intentFilters": [
         {
           "action": "VIEW",
@@ -58,6 +58,12 @@
         "expo-camera",
         {
           "cameraPermission": "ЦЕЗАРЬ нужен доступ к камере для сканирования QR-кодов карточек"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Приложению нужен доступ к фото для распознавания QR-кодов с карточек"
         }
       ]
     ],
