@@ -105,5 +105,18 @@ export function LinkingProvider({ children }) {
     if (isAuthed || token) dispatchQueue();
   }, [isAuthed, token]);
 
-  return <LinkCtx.Provider value={{ linkError, clearLinkError: () => setLinkError('') }}>{children}</LinkCtx.Provider>;
+  // v1.7: встроенный QR-сканер передаёт сюда отсканированный текст.
+  // Разбираем его тем же парсером, что и deep link, и открываем сущность
+  // (гостевой токен ?t=… поддерживается автоматически).
+  const handleScannedCode = (text) => {
+    const target = extractEntityTarget(text);
+    if (!target) {
+      setLinkError('Это не QR-код карточки Цезаря');
+      return false;
+    }
+    openTarget(target);
+    return true;
+  };
+
+  return <LinkCtx.Provider value={{ linkError, clearLinkError: () => setLinkError(''), handleScannedCode }}>{children}</LinkCtx.Provider>;
 }
