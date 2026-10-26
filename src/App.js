@@ -44,15 +44,12 @@ function MainTabs() {
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Главная', tabBarLabel: 'Главная', tabBarIcon: ({ color }) => <View><Text style={{ color, fontSize: 18 }}>⚔</Text></View> }} />
       <Tab.Screen name="Tasks" component={TasksScreen} options={{ title: 'Задачи', tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>🗂</Text> }} />
       {/* v1.7: встроенный QR-сканер — кнопка по середине нижнего футера */}
+      {/* v1.9.1: раньше таб перехватывался через preventDefault + navigate из
+          слушателя — в React Navigation 7 такой паттерн ненадёжен (переход
+          терялся, экран не открывался). Теперь Scan — обычный tab-экран. */}
       <Tab.Screen
-        name="ScanTab"
-        component={() => null}
-        listeners={({ navigation }) => ({
-          tabPress: (e) => {
-            e.preventDefault(); // сам таб не открывается — редиректим на модалку сканера
-            navigation.navigate('Scan');
-          },
-        })}
+        name="Scan"
+        component={ScanScreen}
         options={{
           title: 'Скан',
           tabBarLabel: 'Скан',
@@ -139,7 +136,6 @@ function Root() {
               <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
               <Stack.Screen name="NewTask" component={NewTaskScreen} options={{ title: 'Новая задача' }} />
               <Stack.Screen name="Entity" component={EntityScreen} options={{ title: 'Карточка' }} />
-              <Stack.Screen name="Scan" component={ScanScreen} options={{ title: 'Сканер QR', headerStyle: { backgroundColor: '#000' }, headerShadowVisible: false }} />
             </>
           ) : (
             <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
