@@ -39,6 +39,11 @@ test('токен с percent-encoding раскодуется', () => {
   const t = extractEntityTarget('https://s.example/open/e/u1?t=a%2Fb%2Bc');
   assert.equal(t.t, 'a/b+c');
 });
+test('короткий алиас QR /o/{uid} (компактный код для печати)', () => {
+  const t = extractEntityTarget('https://zezar-patfiz.waw0.amvera.tech/o/a1b2c3d4e5f6?t=1.2.3.abc');
+  assert.equal(t.uid, 'a1b2c3d4e5f6'); assert.equal(t.t, '1.2.3.abc');
+  assert.equal(t.baseUrl, 'https://zezar-patfiz.waw0.amvera.tech');
+});
 test('не-carточка → null', () => {
   assert.equal(extractEntityTarget('https://example.com/other'), null);
   assert.equal(extractEntityTarget('привет мир'), null);

@@ -98,7 +98,15 @@ export function AuthProvider({ children }) {
     } else if (baseUrl && !prevUrl) {
       await setServerUrl(baseUrl); setServerUrlState(await getServerUrl());
     }
-    const r = await api.guestLogin(guestToken);
+    // Обмен гостевого токена ВСЕГДА идёт на сервер из ссылки QR: токен подписан
+    // его SECRET_KEY и живёт только там. При расхождении с настроенным стендом
+    // локально переключаемся на baseUrl (основная сессия уже сохранена в
+    // KEY_MAIN_SESSION), а после выхода из гостя восстановим прежний адрес.
+    const effBase = baseUrl || (await getServerUrl());
+    if (baseUrl && prevUrl && normalizeUrl(baseUrl) !== normalizeUrl(prevUrl)) {
+      await setServerUrl(baseUrl); setServerUrlState(await getServerUrl());
+    }
+    const r = await api.guestLogin(guestToken, effBase);
     await setToken(r.access_token);
     setTokenState(r.access_token);
     setGuest(true);
@@ -112,7 +120,8 @@ export function AuthProvider({ children }) {
     try { main = JSON.parse((await AsyncStorage.getItem(KEY_MAIN_SESSION)) || 'null'); } catch (_) {}
     await AsyncStorage.removeItem(KEY_MAIN_SESSION);
     if (main && main.token) {
-      await setServerUrl(main.serverUrl);
+      // восстанавливаем и адрес сервера (гостевой скан QR мог переключить на другой стенд)
+      if (main.serverUrl) await setServerUrl(main.serverUrl);
       await setToken(main.token);
       setServerUrlState(await getServerUrl());
       setTokenState(main.token);

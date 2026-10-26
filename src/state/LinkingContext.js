@@ -21,7 +21,8 @@ export function parseEntityUrl(url) {
   const qIdx = hashless.indexOf('?');
   const path = qIdx >= 0 ? hashless.slice(0, qIdx) : hashless;
   const query = qIdx >= 0 ? hashless.slice(qIdx + 1) : '';
-  const m = path.match(/(?:^|:\/\/|\/)(?:open\/)?(?:entity|e)\/([A-Za-z0-9_-]{1,64})(?:\/$|$)/);
+  let m = path.match(/(?:^|:\/\/|\/)(?:open\/)?(?:entity|e)\/([A-Za-z0-9_-]{1,64})(?:\/$|$)/);
+  if (!m) m = path.match(/(?:^|:\/\/|\/)o\/([A-Za-z0-9_-]{1,64})(?:\/$|$)/); // короткий алиас QR /o/{uid}
   if (!m) return null;
   let t;
   const tm = /(?:^|&)t=([^&]+)/.exec(query);

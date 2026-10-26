@@ -24,7 +24,12 @@ export default function ScanScreen({ navigation }) {
 
   const handleResult = async (url) => {
     if (firedRef.current) return; // один срабат на скан
-    const target = extractEntityTarget(url);
+    let target = extractEntityTarget(url);
+    // Страховка: камера могла прочитать голый uid без ссылки (например, QR
+    // старого образца или кривая напечатка) — пробуем как идентификатор карточки.
+    if (!target && /^[A-Za-z0-9_-]{1,64}$/.test((url || '').trim())) {
+      target = { uid: url.trim() };
+    }
     if (!target) {
       firedRef.current = true;
       setMessage('На QR-коде не распознана ссылка карточки ЦЕЗАРЬ');
@@ -66,12 +71,21 @@ export default function ScanScreen({ navigation }) {
       if (r.canceled || !r.assets?.[0]?.uri) return;
       setPicking(true);
       setMessage('Ищем QR-код на фото…');
-      const codes = await scanFromURLAsync(r.assets[0].uri, ['qr']);
+      let codes = [];
+      try {
+        codes = await scanFromURLAsync(r.assets[0].uri, ['qr']);
+      } catch (e) {
+        // движок распознавания может отсутствовать в Expo Go — не роняем экран
+        setPicking(false);
+        setMessage(`Не удалось распознать фото: ${e?.message || e}`);
+        setTimeout(() => setMessage(''), 4000);
+        return;
+      }
       setPicking(false);
       const data = codes?.[0]?.data;
       if (!data) {
-        setMessage('На выбранном фото QR-код не найден — попробуйте другое');
-        setTimeout(() => setMessage(''), 3000);
+        setMessage('На выбранном фото QR-код не найден — сделайте снимок крупнее и без бликов');
+        setTimeout(() => setMessage(''), 3500);
         return;
       }
       firedRef.current = false; // снимаем блокировку — результат обрабатываем как скан
