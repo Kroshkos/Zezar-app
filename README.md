@@ -105,8 +105,15 @@ tests/        offline.test.js (unit-тесты оффлайн-модуля, `npm
 ## CI/CD — автосборка релизов
 
 Workflow `build.yml` (см. [`ci/build.yml`](ci/build.yml) и issue #1 с инструкцией установки):
-- **Триггер:** push тега `vX.Y.Z[-пререлиз]` или ручной запуск из вкладки Actions;
-- **Сборка:** unit-тесты → прошивка версии из тега (`scripts/set-version.js`) → `eas build` (APK для alpha/beta, AAB для стабильных);
-- **Релиз:** GitHub Release с APK-файлом и changelog из коммитов между тегами.
+- **Триггер:** push тега `vX.Y.Z[-пререлиз]` или ручной запуск из вкладки Actions (там же можно выбрать платформу: both / android / ios);
+- **Сборка:** unit-тесты → прошивка версии из тега (`scripts/set-version.js`) → `eas build` на обе платформы:
+  Android — APK для alpha/beta, AAB для стабильных; iOS — simulator-build для alpha/beta, подписанный IPA для стабильных;
+- **Релиз:** GitHub Release с APK/IPA-файлами и changelog из коммитов между тегами.
 
 Для нативной сборки нужен секрет `EXPO_TOKEN` (expo.dev → Access tokens). Без него Actions публикует release с исходниками и Expo Update-пакетом, а сборку можно пропустить.
+
+Для production-сборок iOS дополнительно требуется Apple Developer Program ($99/год) и настроенные
+в EAS credentials: один раз выполните `eas credentials` (или `eas auto-register-app-store`) локально,
+либо задайте секреты `APPLE_API_KEY` / `APPLE_API_KEY_ID` / `APPLE_API_ISSUER` (App Store Connect API).
+Без них стабильный iOS-релиз не соберётся — job `build-ios` упадёт с ошибкой provisioning,
+но релиз с Android-артефактами всё равно будет опубликован.

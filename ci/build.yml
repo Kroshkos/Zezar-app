@@ -1,6 +1,7 @@
 name: Build mobile app
 
-# Собирает мобильное приложение «ЦЕЗАРЬ» (Expo/EAS) и публикует релиз с APK.
+# Собирает мобильное приложение «ЦЕЗАРЬ» (Expo/EAS) и публикует релиз с APK (Android)
+# и IPA/ссылкой на сборку (iOS).
 # Запуск: push тега vX.Y.Z[-пререлиз] (основной способ) или вручную из вкладки Actions.
 
 on:
@@ -13,6 +14,15 @@ on:
         description: 'Номер версии для сборки (например v0.1.0-alpha.1)'
         required: true
         default: 'v0.1.0-alpha.1'
+      platforms:
+        description: 'Платформы для сборки'
+        required: true
+        type: choice
+        default: 'both'
+        options:
+          - both
+          - android
+          - ios
 
 # contents:write нужен, чтобы workflow мог закоммитить eas.projectId в app.json
 # после `eas init` (иначе push из CI даёт 403 denied to github-actions[bot]).
@@ -20,14 +30,17 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: EAS build (Android)
+  # Общий подготовительный шаг: версия, зависимости, тесты и привязка EAS projectId.
+  # Нужен, чтобы android и ios не гоняли `eas init` параллельно (гонка при создании проекта).
+  setup:
+    name: Подготовка (версия, тесты, EAS project)
     runs-on: ubuntu-latest
     permissions:
       contents: write
     outputs:
       version: ${{ steps.ver.outputs.version }}
-      apk: ${{ steps.art.outputs.apk_url }}
+      profile: ${{ steps.ver.outputs.profile }}
+      has_token: ${{ steps.ver.outputs.has_token }}
     steps:
       - name: Checkout (с тегами)
         uses: actions/checkout@v4
@@ -36,7 +49,7 @@ jobs:
           # токен раннера должен иметь право на коммит projectId обратно в main
           persist-credentials: true
 
-      - name: Определить версию
+      - name: Определить версию и профиль сборки
         id: ver
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -45,6 +58,16 @@ jobs:
             V="${GITHUB_REF_NAME}"
           fi
           echo "version=${V#v}" >> "$GITHUB_OUTPUT"
+          case "${V#v}" in
+            *-*) echo "profile=preview" >> "$GITHUB_OUTPUT" ;;  # alpha/beta — внутренние сборки
+            *)   echo "profile=production" >> "$GITHUB_OUTPUT" ;; # стабильная — Play Store / App Store
+          esac
+          if [ -n "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "has_token=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Секрет EXPO_TOKEN не задан — нативные сборки будут пропущены"
+            echo "has_token=0" >> "$GITHUB_OUTPUT"
+          fi
 
       # EAS CLI требует Node >= 22 (на Node 20 печатает предупреждение о deprecated)
       - name: Node 22
@@ -69,23 +92,18 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           if [ -z "$EXPO_TOKEN" ]; then
-            echo "::warning::Секрет EXPO_TOKEN не задан — нативная сборка будет пропущена"
+            echo "::warning::Секрет EXPO_TOKEN не задан — нативные сборки будут пропущены"
             echo "HAS_TOKEN=0" >> "$GITHUB_ENV"
           else
             echo "HAS_TOKEN=1" >> "$GITHUB_ENV"
             eas whoami
           fi
 
-      - name: EAS build Android (APK для pre-release / AAB для release)
+      - name: Инициализировать EAS проект (если projectId ещё не закоммичен)
         if: env.HAS_TOKEN == '1'
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
-          VERSION="${{ steps.ver.outputs.version }}"
-          case "$VERSION" in
-            *-*) PROFILE="preview" ;;     # alpha/beta — установочный APK
-            *)     PROFILE="production" ;; # стабильная — AAB для Play
-          esac
           # EAS project: если projectId не закоммичен, создаём проект robot-токеном.
           # Robot-токены Expo (EXPO_TOKEN) НЕ имеют доступа к GraphQL me/accounts —
           # поэтому аккаунт берём из переменной секретов EXPO_ACCOUNT (логин или UUID),
@@ -121,6 +139,41 @@ jobs:
             git push origin HEAD:main -q || echo "::warning::не удалось закоммитить projectId (нет прав contents:write у GITHUB_TOKEN)"
           fi
           set -e
+
+  build-android:
+    name: EAS build (Android)
+    needs: setup
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.platforms == 'both' ||
+      github.event.inputs.platforms == 'android'
+    outputs:
+      apk: ${{ steps.art.outputs.apk_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Установка зависимостей
+        run: npm ci --legacy-peer-deps
+
+      - name: Установить EAS CLI
+        run: npm install -g eas-cli@latest
+
+      - name: EAS build Android (APK для pre-release / AAB для release)
+        if: needs.setup.outputs.has_token == '1'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          VERSION="${{ needs.setup.outputs.version }}"
+          PROFILE="${{ needs.setup.outputs.profile }}"
           # Флаг --output запрещён в EAS CLI для remote-сборок (только local builds),
           # поэтому URL сборки забираем из JSON, который eas пишет в stdout.
           # 2>&1 намеренно склеивает stderr с stdout: если сборка упадёт, её текст
@@ -156,18 +209,18 @@ jobs:
           ls -la zezar-android.apk
 
       - name: Пакет Expo Update (OTA, если настроен канал)
-        if: env.HAS_TOKEN == '1'
+        if: needs.setup.outputs.has_token == '1'
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         continue-on-error: true
         run: eas update --channel preview --platform android --non-interactive \
-             --message "v${{ steps.ver.outputs.version }} from CI"
+             --message "v${{ needs.setup.outputs.version }} from CI"
 
       - name: Загрузить артефакты сборки
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: zezar-build-${{ steps.ver.outputs.version }}
+          name: zezar-android-${{ needs.setup.outputs.version }}
           path: |
             zezar-android.apk
           if-no-files-found: ignore
@@ -181,10 +234,115 @@ jobs:
             echo "apk_url=" >> "$GITHUB_OUTPUT"
           fi
 
+  build-ios:
+    name: EAS build (iOS)
+    needs: setup
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.platforms == 'both' ||
+      github.event.inputs.platforms == 'ios'
+    outputs:
+      ipa: ${{ steps.art.outputs.ipa_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Установка зависимостей
+        run: npm ci --legacy-peer-deps
+
+      - name: Установить EAS CLI
+        run: npm install -g eas-cli@latest
+
+      - name: EAS build iOS (simulator-zip для pre-release / ipa для release)
+        if: needs.setup.outputs.has_token == '1'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        # Если Apple Developer не настроен в EAS — сборку помечаем неуспешной, но релиз
+        # всё равно выходит (continue-on-error), как и раньше для проблем с Expo.
+        continue-on-error: true
+        run: |
+          VERSION="${{ needs.setup.outputs.version }}"
+          PROFILE="${{ needs.setup.outputs.profile }}"
+          # eas build сам поднимет macOS-раннер на стороне EAS.
+          # Для профиля preview (distribution=internal) в eas.json включён ios.simulator=true —
+          # такой build не требует сертификатов/профилей Apple (подходит для тестов на симуляторе).
+          # Для production нужен подключённый Apple Developer аккаунт в EAS (eas credentials) —
+          # иначе шаг упадёт с ошибкой provisioning.
+          eas build --platform ios --profile "$PROFILE" --non-interactive \
+            --json > build-ios.json 2>&1 || { cat build-ios.json; exit 1; }
+          cat build-ios.json
+          URL=$(node -e "
+            const raw=require('fs').readFileSync('build-ios.json','utf8');
+            const s=raw.search(/[[{]/);
+            if(s<0){console.error(raw);process.exit(1);}
+            let data=null;
+            try { data=JSON.parse(raw.slice(s)); }
+            catch(e){
+              const open=raw[s]; const close=open==='['?']':'}';
+              let d=0,end=-1;
+              for(let i=s;i<raw.length;i++){ if(raw[i]===open)d++; else if(raw[i]===close){d--; if(d===0){end=i+1;break;}} }
+              if(end<0){console.error(raw);process.exit(1);}
+              try{data=JSON.parse(raw.slice(s,end));}catch(e2){console.error(raw);process.exit(1);}
+            }
+            const b=Array.isArray(data)?data[0]:data;
+            if(b.status && b.status!=='FINISHED'){console.error('Сборка iOS не завершилась успешно:',JSON.stringify(b.error||b.status));process.exit(1);}
+            const ar=b.artifacts||{};
+            const u=ar.buildArtifacts?.ipa?.url || ar.downloadUrl || ar.buildUrl || (ar.build&&ar.build.downloadUrl);
+            if(!u){console.error('Не найден URL артефакта iOS:\n'+raw);process.exit(1);}
+            process.stdout.write(u);
+          ")
+          echo "IOS_BUILD_URL=$URL" >> "$GITHUB_ENV"
+          # Скачиваем артефакт (для simulator-профиля это .zip, для device — .ipa)
+          case "$URL" in
+            *.zip) OUT="zezar-ios-simulator.zip" ;;
+            *)     OUT="zezar-ios.ipa" ;;
+          esac
+          curl -fL --retry 3 -o "$OUT" "$URL" || echo "::warning::не удалось скачать артефакт iOS ($URL)"
+          ls -la "$OUT" 2>/dev/null || true
+
+      - name: Пакет Expo Update (OTA, если настроен канал)
+        if: needs.setup.outputs.has_token == '1'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        continue-on-error: true
+        run: eas update --channel preview --platform ios --non-interactive \
+             --message "v${{ needs.setup.outputs.version }} from CI"
+
+      - name: Загрузить артефакты сборки
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zezar-ios-${{ needs.setup.outputs.version }}
+          path: |
+            zezar-ios.ipa
+            zezar-ios-simulator.zip
+          if-no-files-found: ignore
+
+      - name: Отметить артефакт iOS для релиза
+        id: art
+        run: |
+          if [ -f zezar-ios.ipa ]; then
+            echo "ipa_url=zezar-ios.ipa" >> "$GITHUB_OUTPUT"
+          elif [ -f zezar-ios-simulator.zip ]; then
+            echo "ipa_url=zezar-ios-simulator.zip" >> "$GITHUB_OUTPUT"
+          else
+            echo "ipa_url=" >> "$GITHUB_OUTPUT"
+          fi
+
   release:
     name: Публикация GitHub Release
     runs-on: ubuntu-latest
-    needs: build
+    needs: [setup, build-android, build-ios]
+    # релиз публикуем, даже если одна из платформ не собралась (например, iOS без Apple Developer)
+    if: always() && needs.setup.result == 'success'
     permissions:
       contents: write
     steps:
@@ -193,17 +351,24 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Скачать артефакты
+      - name: Скачать артефакт Android
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
-          name: zezar-build-${{ needs.build.outputs.version }}
+          name: zezar-android-${{ needs.setup.outputs.version }}
+          path: artifacts
+
+      - name: Скачать артефакт iOS
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: zezar-ios-${{ needs.setup.outputs.version }}
           path: artifacts
 
       - name: Собрать текст релиза
         env:
-          VERSION: ${{ needs.build.outputs.version }}
-          APK: ${{ needs.build.outputs.apk }}
+          VERSION: ${{ needs.setup.outputs.version }}
+          APK: ${{ needs.build-android.outputs.apk }}
         run: |
           PREV=$(git describe --tags --abbrev=0 "v${VERSION}^" 2>/dev/null || echo "")
           if [ -n "$PREV" ]; then
@@ -222,16 +387,28 @@ jobs:
               echo "⚠️ Нативная APK-сборка недоступна: в настройках репозитория не задан секрет \`EXPO_TOKEN\` (EAS Build)."
               echo "Запускайте через Expo Go: \`npm install && npx expo start\`."
             fi
+            # Артефакты iOS лежат в ./artifacts после download-artifact — проверяем файлы,
+            # а не outputs: outputs пусты, если job build-ios был пропущен выбором платформы.
+            IOS_FILE=""
+            for f in artifacts/zezar-ios.ipa artifacts/zezar-ios-simulator.zip; do
+              [ -s "$f" ] && IOS_FILE="$(basename "$f")" && break
+            done
+            echo
+            if [ -n "$IOS_FILE" ]; then
+              echo "🍎 **iOS-сборка приложена к релизу** ($IOS_FILE). Сборка для симулятора — zip, для устройства — подписанный IPA (нужен Apple Developer)."
+            else
+              echo "ℹ️ iOS-сборка в этом релизе отсутствует (не настроен EAS/Apple Developer либо платформа не выбрана при запуске)."
+            fi
           } > NOTES.md
           cat NOTES.md
 
       - name: Создать/обновить релиз
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ needs.build.outputs.version }}
-          name: 'ЦЕЗАРЬ mobile v${{ needs.build.outputs.version }}'
+          tag_name: v${{ needs.setup.outputs.version }}
+          name: 'ЦЕЗАРЬ mobile v${{ needs.setup.outputs.version }}'
           body_path: NOTES.md
-          prerelease: ${{ contains(needs.build.outputs.version, '-') }}
+          prerelease: ${{ contains(needs.setup.outputs.version, '-') }}
           files: artifacts/**
           # идемпотентность: повторные прогоны (dispatch/тег) обновляют существующий релиз, а не падают с already_exists
           fail_on_unmatched_files: false
